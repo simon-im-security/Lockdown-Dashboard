@@ -1,7 +1,7 @@
 #!/bin/bash
-# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script with SSH check, auto-login, FDE acknowledgment, and automatic restart
+# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script with Auto-login, USB/Keyboard/Mouse Lockdown, Caffeine, and Firefox kiosk mode
 # Author: Simon .I
-# Version: 2024.11.06
+# Version: 2024.11.07
 
 # Check for Ubuntu and GNOME environment
 if ! grep -qi "ubuntu" /etc/os-release || ! echo "$XDG_CURRENT_DESKTOP" | grep -qi "GNOME"; then
@@ -9,6 +9,7 @@ if ! grep -qi "ubuntu" /etc/os-release || ! echo "$XDG_CURRENT_DESKTOP" | grep -
     exit 1
 fi
 
+# Ensure script is run as root
 if [[ $EUID -ne 0 ]]; then
     zenity --error --text="This script must be run as root."
     exit 1
@@ -52,25 +53,18 @@ else
     sed -i "s/^AutomaticLoginEnable = .*/AutomaticLoginEnable = true/" "$AUTOLOGIN_CONFIG"
 fi
 
-# Verify auto-login by ensuring settings are applied in the config file
-if grep -q "AutomaticLogin = $KIOSK_USER" "$AUTOLOGIN_CONFIG"; then
-    echo "Auto-login configured for user $KIOSK_USER."
-else
-    echo "Failed to configure auto-login. Please check $AUTOLOGIN_CONFIG."
-fi
-
 # Step 5: Ensure Firefox is Installed
 if ! command -v firefox &> /dev/null; then
     echo "Firefox not found. Installing Firefox..."
     apt update && apt install -y firefox
 fi
 
-# Step 6: Kiosk Script with Update Prompt and Progress Bar using Zenity
+# Step 6: Create Kiosk Script with Update Prompt, Firefox Kiosk Mode, and USB Lockdown
 KIOSK_SCRIPT_PATH="/home/$KIOSK_USER/start-kiosk.sh"
 
 cat << EOF > "$KIOSK_SCRIPT_PATH"
 #!/bin/bash
-# start-kiosk.sh - Kiosk startup script for updates, then prompting URL, running in fullscreen, and disabling USB
+# start-kiosk.sh - Kiosk startup script for updates, prompting URL, running in fullscreen, and disabling USB
 
 # Prompt to run system and Firefox updates first
 if zenity --question --title="System Update" --text="Would you like to check for and install system and Firefox updates?"; then
@@ -83,45 +77,42 @@ if zenity --question --title="System Update" --text="Would you like to check for
         echo "80" ; echo "# Installing latest Firefox..." ; sudo apt install -y firefox
         echo "100" ; echo "# Updates complete."
     ) | zenity --progress --title="System Update" --text="Applying updates..." --percentage=0 --auto-close --no-cancel --width=300
-
-    # Show a countdown before restarting
-    for i in {10..1}; do
-        echo "$i seconds remaining until restart..."
-        zenity --notification --text="$i seconds remaining until restart..."
-        sleep 1
-    done
-
-    zenity --info --title="Restarting" --text="The system will now restart to apply updates."
-    sudo shutdown -r now
-    exit 0
 fi
 
-# Prompt for URL if no updates are applied
+# Prompt for URL after updates
 URL=\$(zenity --entry --title="Kiosk URL" --text="Enter the URL for kiosk mode:" --entry-text="https://example.splunkcloud.com")
 if [[ -z "\$URL" ]]; then
     zenity --warning --title="Kiosk Setup" --text="No URL provided. Exiting setup."
     exit 1
 fi
 
-# Confirm URL Setup
+# Confirm URL setup
 zenity --info --title="Kiosk Mode" --text="URL set to: \$URL. The browser will now open in kiosk mode."
 
-# Launch Firefox in Kiosk Mode with the Specified URL
+# Launch Firefox in Kiosk Mode with the specified URL
 firefox --kiosk "\$URL"
 
 # Disable all USB ports except HDMI and Ethernet
-echo "Disabling all USB ports except for HDMI and Ethernet..."
-UDEV_RULES_FILE="/etc/udev/rules.d/99-disable-usb.rules"
+echo "Disabling all USB, keyboard, and mouse inputs except HDMI and Ethernet..."
+
+# Udev rules for USB, Keyboard, and Mouse lockdown
+UDEV_RULES_FILE="/etc/udev/rules.d/99-disable-input.rules"
 cat << 'RULES' > "\$UDEV_RULES_FILE"
-# Disable all USB devices except for HDMI and Ethernet
+# Disable all USB devices except HDMI and Ethernet
 ACTION=="add", SUBSYSTEM=="usb", ATTR{authorized}="0"
+
+# Disable Keyboard
+SUBSYSTEM=="input", ATTRS{name}=="*Keyboard*", ATTR{authorized}="0"
+
+# Disable Mouse
+SUBSYSTEM=="input", ATTRS{name}=="*Mouse*", ATTR{authorized}="0"
 RULES
 
 # Reload udev rules to apply changes
 udevadm control --reload-rules
 udevadm trigger
 
-zenity --info --title="Kiosk Setup" --text="USB ports are now disabled until the next reboot."
+zenity --info --title="Kiosk Setup" --text="USB, keyboard, and mouse inputs are now disabled until the next reboot."
 EOF
 
 # Make Kiosk Script Executable
@@ -181,7 +172,7 @@ else
     echo "SSH service not found, skipping disable step."
 fi
 
-# Step 11: Automatic Restart After Setup
-echo "Setup complete. Restarting system..."
+# Step 11: One-Time Restart to Apply All Setup Changes
+echo "Initial setup complete. Restarting system to apply changes."
 sleep 2
 shutdown -r now
