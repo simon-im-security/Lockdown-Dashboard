@@ -14,12 +14,12 @@ echo "Installing LightDM and XFCE for kiosk autologin setup..."
 apt update && apt install -y lightdm xfce4
 systemctl enable lightdm
 
-# Configure LightDM for Autologin
+# Configure LightDM for Autologin (even if the account has a password)
 echo "Configuring LightDM for autologin..."
 sudo mkdir -p /etc/lightdm/lightdm.conf.d
 sudo bash -c "cat > /etc/lightdm/lightdm.conf.d/01-autologin.conf <<EOF
 [Seat:*]
-autologin-user=kiosk
+autologin-user=$KIOSK_USER
 autologin-user-timeout=0
 EOF
 "
@@ -164,7 +164,5 @@ else
     echo "SSH service not found, skipping disable step."
 fi
 
-# Step 12: One-Time Restart to Apply All Setup Changes
-echo "Initial setup complete. Restarting system to apply changes."
-sleep 2
-reboot
+# Final message to indicate setup completion
+zenity --info --title="Kiosk Setup Complete" --text="Kiosk setup is complete. Please log out and log in as the kiosk user to start the kiosk environment."
