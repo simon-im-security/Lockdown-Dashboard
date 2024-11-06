@@ -41,7 +41,7 @@ fi
 zenity --info --title="Autologin Setup Required" --text="To enable autologin for the kiosk account, please:\n\n1. Open 'Settings'.\n2. Search for 'Users'.\n3. Select the kiosk user: $KIOSK_USER.\n4. Unlock (if required) and enable 'Automatic Login'.\n\nClick OK once done." --ok-label="OK"
 
 # Confirm that the user has set up autologin
-zenity --info --title="Autologin Confirmation" --text="Please confirm that you have set up autologin for $KIOSK_USER by following the instructions." --ok-label="OK"
+zenity --info --title="Autologin Confirmation" --text="Click OK if you have completed the autologin setup for the kiosk user."
 
 # Step 3: Check and Install xinput and usb-modeswitch if missing
 if ! command -v xinput &> /dev/null; then
@@ -179,7 +179,7 @@ EOF
 # Step 10: Check for Full-Disk Encryption (Warn Only with OK Button)
 echo "Checking for full-disk encryption..."
 if ! lsblk -o name,type,fstype,mountpoint | grep -q "crypto_LUKS"; then
-    zenity --info --title="Kiosk Setup - Security Notice" --text="Full-disk encryption (FDE) not detected. We recommend enabling FDE for additional security." --ok-label="OK"
+    zenity --info --title="Kiosk Setup - Security Notice" --text="Full-disk encryption (FDE) is not enabled. FDE can only be set up during OS installation, but it is not required to proceed." --ok-label="OK"
 fi
 
 # Step 11: Disable SSH Service if Installed
