@@ -1,11 +1,11 @@
 #!/bin/bash
-# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script with improved autologin, conditional input lockdown, and Firefox kiosk mode
+# create-kiosk-setup.sh - Ubuntu XFCE Kiosk Setup with LightDM, Conditional Input Lockdown, and Firefox Kiosk Mode
 # Author: Simon .I
 # Version: 2024.11.07
 
-# Check for Ubuntu and GNOME environment
-if ! grep -qi "ubuntu" /etc/os-release || ! echo "$XDG_CURRENT_DESKTOP" | grep -qi "GNOME"; then
-    zenity --error --text="This script is intended for Ubuntu with GNOME desktop only. Exiting setup."
+# Check for Ubuntu environment
+if ! grep -qi "ubuntu" /etc/os-release; then
+    zenity --error --text="This script is intended for Ubuntu only. Exiting setup."
     exit 1
 fi
 
@@ -21,7 +21,19 @@ if ! command -v xinput &> /dev/null; then
     apt update && apt install -y xinput
 fi
 
-# Step 2: Prompt for Kiosk Username and Password without Cancel Option
+# Step 2: Install LightDM and XFCE for Easier Autologin Setup
+echo "Installing LightDM and XFCE for lightweight autologin setup..."
+apt update
+apt install -y lightdm xfce4
+
+# Configure LightDM for Autologin
+sudo bash -c "cat > /etc/lightdm/lightdm.conf <<EOF
+[Seat:*]
+autologin-user=$KIOSK_USER
+EOF
+"
+
+# Step 3: Prompt for Kiosk Username and Password without Cancel Option
 KIOSK_USER=$(zenity --entry --title="Kiosk Setup - Username" --text="Enter the username for the kiosk account:")
 if [[ -z "$KIOSK_USER" ]]; then
     zenity --error --text="No username provided. Exiting setup."
@@ -34,7 +46,7 @@ if [[ -z "$KIOSK_PASSWORD" ]]; then
     exit 1
 fi
 
-# Step 3: Create Kiosk User Account
+# Step 4: Create Kiosk User Account
 echo "Creating kiosk user account with username: $KIOSK_USER..."
 if id "$KIOSK_USER" &>/dev/null; then
     echo "User '$KIOSK_USER' already exists. Skipping creation."
@@ -45,27 +57,9 @@ else
     echo "Kiosk user created with username: $KIOSK_USER"
 fi
 
-# Step 4: Disable GNOME Notifications for Kiosk User
-echo "Disabling GNOME notifications for kiosk user..."
-sudo -u "$KIOSK_USER" dbus-launch gsettings set org.gnome.desktop.notifications show-banners false
-
-# Step 5: Set Up Improved Auto-Login for Kiosk User
-echo "Configuring auto-login for kiosk user..."
-AUTOLOGIN_CONFIG="/etc/gdm3/custom.conf"
-if ! grep -q "AutomaticLoginEnable = true" "$AUTOLOGIN_CONFIG"; then
-    echo -e "\n[daemon]\nAutomaticLoginEnable = true\nAutomaticLogin = $KIOSK_USER" >> "$AUTOLOGIN_CONFIG"
-else
-    sed -i "s/^AutomaticLogin = .*/AutomaticLogin = $KIOSK_USER/" "$AUTOLOGIN_CONFIG"
-    sed -i "s/^AutomaticLoginEnable = .*/AutomaticLoginEnable = true/" "$AUTOLOGIN_CONFIG"
-fi
-
-# Additional configuration for LightDM (alternative method)
-sudo mkdir -p /etc/lightdm/lightdm.conf.d
-sudo bash -c "cat > /etc/lightdm/lightdm.conf.d/50-myconfig.conf <<EOF
-[Seat:*]
-autologin-user=$KIOSK_USER
-EOF
-"
+# Step 5: Disable XFCE Notifications for Kiosk User
+echo "Disabling notifications for kiosk user..."
+sudo -u "$KIOSK_USER" dbus-launch xfconf-query -c xfce4-notifyd -p /do-not-disturb -s true
 
 # Step 6: Ensure Firefox is Installed
 if ! command -v firefox &> /dev/null; then
@@ -73,7 +67,7 @@ if ! command -v firefox &> /dev/null; then
     apt update && apt install -y firefox
 fi
 
-# Step 7: Create Kiosk Script with Update Prompt, Firefox Kiosk Mode, and Conditional Input Lockdown
+# Step 7: Create Kiosk Script with Firefox Kiosk Mode and Conditional Input Lockdown
 KIOSK_SCRIPT_PATH="/home/$KIOSK_USER/start-kiosk.sh"
 
 cat << 'EOF' > "$KIOSK_SCRIPT_PATH"
@@ -85,41 +79,24 @@ for id in $(xinput --list --id-only); do
     xinput enable "$id"
 done
 
-# Prompt to run system and Firefox updates first
-if zenity --question --title="Kiosk Setup - System Update" --text="Would you like to check for and install system and Firefox updates?"; then
-    zenity --info --title="Kiosk Setup - Updating System" --text="Updating system and Firefox. Please wait..."
-
-    # Start the update process with a detailed progress bar using zenity
-    (
-        echo "10" ; echo "# Updating package list..." ; sudo apt update
-        echo "50" ; echo "# Upgrading packages..." ; sudo apt -y upgrade
-        echo "80" ; echo "# Installing latest Firefox..." ; sudo apt install -y firefox
-        echo "100" ; echo "# Updates complete."
-    ) | zenity --progress --title="Kiosk Setup - System Update" --text="Applying updates..." --percentage=0 --auto-close --no-cancel --width=300
-fi
-
-# Prompt for URL after updates
+# Prompt for URL for kiosk mode
 URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:" --entry-text="https://example.splunkcloud.com")
 if [[ -z "$URL" ]]; then
     zenity --warning --title="Kiosk Setup" --text="No URL provided. Exiting setup."
     exit 1
 fi
 
-# Confirm URL setup
-zenity --info --title="Kiosk Mode" --text="URL set to: $URL. The browser will now open in kiosk mode."
-
-# Launch Firefox in Kiosk Mode with the specified URL
+# Launch Firefox in Kiosk Mode with the specified URL and wait 3 seconds before showing confirmation
 firefox --kiosk "$URL" &
+sleep 3
 
-# Wait for confirmation before disabling inputs
-zenity --info --title="Kiosk Setup - Confirm" --text="Once the page is loaded and authentication (if any) is complete, click OK to disable keyboard and mouse."
+# Confirmation to disable inputs once URL is loaded
+zenity --info --title="Kiosk Mode - Confirm" --text="Once the page has loaded and authentication (if any) is complete, click OK to disable keyboard and mouse."
 
 # Disable all input devices (keyboard, mouse, etc.) to prevent exiting kiosk mode
 for id in $(xinput --list --id-only); do
     xinput disable "$id"
 done
-
-zenity --info --title="Kiosk Setup" --text="Keyboard and mouse inputs are now disabled."
 EOF
 
 # Make Kiosk Script Executable
