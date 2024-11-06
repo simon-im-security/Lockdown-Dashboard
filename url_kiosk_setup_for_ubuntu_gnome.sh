@@ -1,5 +1,5 @@
 #!/bin/bash
-# create-kiosk-setup.sh - Debian XFCE Kiosk Setup with LightDM, Update Prompt, Input Lockdown, and Firefox Kiosk Mode
+# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup with LightDM, Firefox Update, Input Lockdown, and USB Disable
 # Author: Simon .I
 # Version: 2024.11.07
 
@@ -9,25 +9,36 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# Step 1: Install LightDM and XFCE for a Lightweight Autologin Environment
-echo "Installing LightDM and XFCE for kiosk autologin setup..."
-apt update && apt install -y lightdm xfce4
+# Check for Ubuntu and GNOME environment
+if ! grep -qi "ubuntu" /etc/os-release || ! echo "$XDG_CURRENT_DESKTOP" | grep -qi "GNOME"; then
+    zenity --error --text="This script is intended for Ubuntu with GNOME desktop only. Exiting setup."
+    exit 1
+fi
+
+# Step 1: Install LightDM for Autologin Support
+echo "Installing LightDM for GNOME kiosk autologin setup..."
+apt update && apt install -y lightdm
 systemctl enable lightdm
 
-# Configure LightDM for Autologin (even if the account has a password)
+# Configure LightDM for Autologin
 echo "Configuring LightDM for autologin..."
 sudo mkdir -p /etc/lightdm/lightdm.conf.d
 sudo bash -c "cat > /etc/lightdm/lightdm.conf.d/01-autologin.conf <<EOF
 [Seat:*]
-autologin-user=$KIOSK_USER
+autologin-user=kiosk
 autologin-user-timeout=0
 EOF
 "
 
-# Step 2: Check and Install xinput if missing
+# Step 2: Check and Install xinput and usb-modeswitch if missing
 if ! command -v xinput &> /dev/null; then
     echo "xinput not found. Installing xinput..."
     apt install -y xinput
+fi
+
+if ! command -v usb_modeswitch &> /dev/null; then
+    echo "usb-modeswitch not found. Installing usb-modeswitch..."
+    apt install -y usb-modeswitch
 fi
 
 # Step 3: Prompt for Kiosk Username and Password without Cancel Option
@@ -54,9 +65,11 @@ else
     echo "Kiosk user created with username: $KIOSK_USER"
 fi
 
-# Step 5: Disable XFCE Notifications for Kiosk User
-echo "Disabling notifications for kiosk user..."
-sudo -u "$KIOSK_USER" dbus-launch xfconf-query -c xfce4-notifyd -p /do-not-disturb -s true
+# Step 5: Disable GNOME Notifications and System Update Notifications for Kiosk User
+echo "Disabling notifications and update prompts for kiosk user..."
+sudo -u "$KIOSK_USER" dbus-launch gsettings set org.gnome.desktop.notifications show-banners false
+# Disable automatic update notifications (Ubuntu/Debian-based method)
+echo 'APT::Periodic::Update-Package-Lists "0";' | sudo tee /etc/apt/apt.conf.d/10periodic > /dev/null
 
 # Step 6: Ensure Firefox is Installed
 if ! command -v firefox &> /dev/null; then
@@ -64,22 +77,23 @@ if ! command -v firefox &> /dev/null; then
     apt update && apt install -y firefox
 fi
 
-# Step 7: Create Kiosk Script with Update Prompt, Firefox Kiosk Mode, and Conditional Input Lockdown
+# Step 7: Create Kiosk Script with Firefox Update, Firefox Kiosk Mode, Input Lockdown, and USB Disable
 KIOSK_SCRIPT_PATH="/home/$KIOSK_USER/start-kiosk.sh"
 
 cat << 'EOF' > "$KIOSK_SCRIPT_PATH"
 #!/bin/bash
-# start-kiosk.sh - Kiosk startup script with Firefox Kiosk Mode, Update Prompt, and Input Lockdown
+# start-kiosk.sh - Kiosk startup script with Firefox Update, Firefox Kiosk Mode, Input Lockdown, and USB Disable
 
-# Prompt for Updates
-if zenity --question --title="Kiosk Setup - System Update" --text="Would you like to check for and install system and Firefox updates?"; then
-    zenity --info --title="Kiosk Setup - Updating System" --text="Updating system. Please wait..."
+# Prompt to Update Firefox
+if zenity --question --title="Kiosk Setup - Firefox Update" --text="Do you want to update Firefox before launching the kiosk mode?"; then
+    zenity --info --title="Kiosk Setup - Updating Firefox" --text="Updating Firefox. Please wait..."
     (
-        echo "10"; echo "# Updating package list..."; sudo apt update
-        echo "50"; echo "# Upgrading packages..."; sudo apt -y upgrade
-        echo "80"; echo "# Installing latest Firefox..."; sudo apt install -y firefox
-        echo "100"; echo "# Updates complete."
-    ) | zenity --progress --title="Kiosk Setup - System Update" --text="Applying updates..." --percentage=0 --auto-close --no-cancel --width=300
+        echo "20"; echo "# Installing latest Firefox..."; sudo apt install -y firefox
+        echo "100"; echo "# Firefox update complete. The device will restart shortly."
+    ) | zenity --progress --title="Kiosk Setup - Firefox Update" --text="Updating Firefox. Please wait..." --percentage=0 --auto-close --no-cancel --width=300
+
+    sudo shutdown -r now
+    exit 0
 fi
 
 # Enable all inputs on startup to allow for configuration
@@ -87,8 +101,8 @@ for id in $(xinput --list --id-only); do
     xinput enable "$id"
 done
 
-# Prompt for URL for kiosk mode
-URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:" --entry-text="https://example.splunkcloud.com")
+# Prompt for URL for kiosk mode without a cancel button
+URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:" --entry-text="https://example.splunkcloud.com" --no-cancel)
 if [[ -z "$URL" ]]; then
     zenity --warning --title="Kiosk Setup" --text="No URL provided. Exiting setup."
     exit 1
@@ -105,6 +119,14 @@ zenity --info --title="Kiosk Mode - Confirm" --text="Once the page is loaded and
 for id in $(xinput --list --id-only); do
     xinput disable "$id"
 done
+
+# Disable all USB ports except for critical ones
+echo "Disabling USB storage devices..."
+sudo rmmod usb_storage  # Disables all USB storage devices
+
+# To disable specific USB devices by ID, use the following approach:
+# Example for a specific USB device:
+# echo '1-1' | sudo tee /sys/bus/usb/drivers/usb/unbind  # Replace '1-1' with the correct USB device ID
 EOF
 
 # Make Kiosk Script Executable
@@ -164,5 +186,5 @@ else
     echo "SSH service not found, skipping disable step."
 fi
 
-# Final message to indicate setup completion
+# Final message indicating setup completion
 zenity --info --title="Kiosk Setup Complete" --text="Kiosk setup is complete. Please log out and log in as the kiosk user to start the kiosk environment."
