@@ -25,7 +25,7 @@ echo "Configuring LightDM for autologin..."
 sudo mkdir -p /etc/lightdm/lightdm.conf.d
 sudo bash -c "cat > /etc/lightdm/lightdm.conf.d/01-autologin.conf <<EOF
 [Seat:*]
-autologin-user=kiosk
+autologin-user=$KIOSK_USER
 autologin-user-timeout=0
 EOF
 "
@@ -89,11 +89,13 @@ if zenity --question --title="Kiosk Setup - Firefox Update" --text="Do you want 
     zenity --info --title="Kiosk Setup - Updating Firefox" --text="Updating Firefox. Please wait..."
     (
         echo "20"; echo "# Installing latest Firefox..."; sudo apt install -y firefox
-        echo "100"; echo "# Firefox update complete. The device will restart shortly."
+        echo "100"; echo "# Firefox update complete."
     ) | zenity --progress --title="Kiosk Setup - Firefox Update" --text="Updating Firefox. Please wait..." --percentage=0 --auto-close --no-cancel --width=300
 
-    sudo shutdown -r now
-    exit 0
+    # Display Firefox version and installation date after update
+    FIREFOX_VERSION=$(firefox --version)
+    INSTALL_DATE=$(date +"%Y-%m-%d %H:%M:%S")
+    zenity --info --title="Kiosk Setup - Update Complete" --text="Firefox update complete:\n\nVersion: $FIREFOX_VERSION\nInstalled on: $INSTALL_DATE"
 fi
 
 # Enable all inputs on startup to allow for configuration
