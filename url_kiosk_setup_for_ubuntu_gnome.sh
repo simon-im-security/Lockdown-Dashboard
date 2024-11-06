@@ -1,13 +1,19 @@
 #!/bin/bash
-# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script with conditional USB disablement, auto-login, and user-prompted updates using Firefox
+# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script with conditional USB disablement, auto-login, and user-prompted updates using Firefox and yad
 # Author: Simon .I
 # Version: 2024.11.06
 
 # Check for Ubuntu and GNOME environment
 if ! grep -qi "ubuntu" /etc/os-release || ! echo "$XDG_CURRENT_DESKTOP" | grep -qi "GNOME"; then
     echo "This script is intended for Ubuntu with GNOME desktop only."
-    yad --title="Setup Error" --text="This script is intended for Ubuntu with GNOME desktop only. Exiting setup." --button="OK:0"
+    zenity --title="Setup Error" --text="This script is intended for Ubuntu with GNOME desktop only. Exiting setup." --button="OK:0"
     exit 1
+fi
+
+# Check and install yad if it's not already installed
+if ! command -v yad &> /dev/null; then
+    echo "yad not found, installing..."
+    apt update && apt install -y yad
 fi
 
 if [[ $EUID -ne 0 ]]; then
