@@ -1,5 +1,5 @@
 #!/bin/bash
-# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script with SSH check, auto-login, FDE acknowledgment, USB/Keyboard/Mouse Lockdown, and Firefox kiosk mode
+# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script with improved autologin, conditional input lockdown, and Firefox kiosk mode
 # Author: Simon .I
 # Version: 2024.11.07
 
@@ -22,13 +22,13 @@ if ! command -v xinput &> /dev/null; then
 fi
 
 # Step 2: Prompt for Kiosk Username and Password without Cancel Option
-KIOSK_USER=$(zenity --entry --title="Kiosk Username" --text="Enter the username for the kiosk account:")
+KIOSK_USER=$(zenity --entry --title="Kiosk Setup - Username" --text="Enter the username for the kiosk account:")
 if [[ -z "$KIOSK_USER" ]]; then
     zenity --error --text="No username provided. Exiting setup."
     exit 1
 fi
 
-KIOSK_PASSWORD=$(zenity --password --title="Kiosk Password" --text="Enter the password for the kiosk account:")
+KIOSK_PASSWORD=$(zenity --password --title="Kiosk Setup - Password" --text="Enter the password for the kiosk account:")
 if [[ -z "$KIOSK_PASSWORD" ]]; then
     zenity --error --text="No password provided. Exiting setup."
     exit 1
@@ -49,7 +49,7 @@ fi
 echo "Disabling GNOME notifications for kiosk user..."
 sudo -u "$KIOSK_USER" dbus-launch gsettings set org.gnome.desktop.notifications show-banners false
 
-# Step 5: Set Up Auto-Login for Kiosk User
+# Step 5: Set Up Improved Auto-Login for Kiosk User
 echo "Configuring auto-login for kiosk user..."
 AUTOLOGIN_CONFIG="/etc/gdm3/custom.conf"
 if ! grep -q "AutomaticLoginEnable = true" "$AUTOLOGIN_CONFIG"; then
@@ -58,6 +58,14 @@ else
     sed -i "s/^AutomaticLogin = .*/AutomaticLogin = $KIOSK_USER/" "$AUTOLOGIN_CONFIG"
     sed -i "s/^AutomaticLoginEnable = .*/AutomaticLoginEnable = true/" "$AUTOLOGIN_CONFIG"
 fi
+
+# Additional configuration for LightDM (alternative method)
+sudo mkdir -p /etc/lightdm/lightdm.conf.d
+sudo bash -c "cat > /etc/lightdm/lightdm.conf.d/50-myconfig.conf <<EOF
+[Seat:*]
+autologin-user=$KIOSK_USER
+EOF
+"
 
 # Step 6: Ensure Firefox is Installed
 if ! command -v firefox &> /dev/null; then
@@ -78,8 +86,8 @@ for id in $(xinput --list --id-only); do
 done
 
 # Prompt to run system and Firefox updates first
-if zenity --question --title="System Update" --text="Kiosk Setup: Would you like to check for and install system and Firefox updates?"; then
-    zenity --info --title="Kiosk Setup: Updating System" --text="Updating system and Firefox. Please wait..."
+if zenity --question --title="Kiosk Setup - System Update" --text="Would you like to check for and install system and Firefox updates?"; then
+    zenity --info --title="Kiosk Setup - Updating System" --text="Updating system and Firefox. Please wait..."
 
     # Start the update process with a detailed progress bar using zenity
     (
@@ -87,11 +95,11 @@ if zenity --question --title="System Update" --text="Kiosk Setup: Would you like
         echo "50" ; echo "# Upgrading packages..." ; sudo apt -y upgrade
         echo "80" ; echo "# Installing latest Firefox..." ; sudo apt install -y firefox
         echo "100" ; echo "# Updates complete."
-    ) | zenity --progress --title="Kiosk Setup: System Update" --text="Applying updates..." --percentage=0 --auto-close --no-cancel --width=300
+    ) | zenity --progress --title="Kiosk Setup - System Update" --text="Applying updates..." --percentage=0 --auto-close --no-cancel --width=300
 fi
 
 # Prompt for URL after updates
-URL=$(zenity --entry --title="Kiosk URL" --text="Enter the URL for kiosk mode:" --entry-text="https://example.splunkcloud.com")
+URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:" --entry-text="https://example.splunkcloud.com")
 if [[ -z "$URL" ]]; then
     zenity --warning --title="Kiosk Setup" --text="No URL provided. Exiting setup."
     exit 1
@@ -103,8 +111,8 @@ zenity --info --title="Kiosk Mode" --text="URL set to: $URL. The browser will no
 # Launch Firefox in Kiosk Mode with the specified URL
 firefox --kiosk "$URL" &
 
-# Wait 60 seconds to allow any authentication prompts to complete
-sleep 60
+# Wait for confirmation before disabling inputs
+zenity --info --title="Kiosk Setup - Confirm" --text="Once the page is loaded and authentication (if any) is complete, click OK to disable keyboard and mouse."
 
 # Disable all input devices (keyboard, mouse, etc.) to prevent exiting kiosk mode
 for id in $(xinput --list --id-only); do
@@ -160,7 +168,7 @@ EOF
 # Step 10: Check for Full-Disk Encryption (Warn Only with OK Button)
 echo "Checking for full-disk encryption..."
 if ! lsblk -o name,type,fstype,mountpoint | grep -q "crypto_LUKS"; then
-    zenity --info --title="Security Notice" --text="Full-disk encryption (FDE) not detected. We recommend enabling FDE for additional security." --ok-label="OK"
+    zenity --info --title="Kiosk Setup - Security Notice" --text="Full-disk encryption (FDE) not detected. We recommend enabling FDE for additional security." --ok-label="OK"
 fi
 
 # Step 11: Disable SSH Service if Installed
