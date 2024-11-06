@@ -1,5 +1,5 @@
 #!/bin/bash
-# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup with Autologin Instructions, Firefox/OS Update Options, Input Lockdown, USB Disable, Caffeine, FDE Check, and SSH Disable
+# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script
 # Author: Simon .I
 # Version: 2024.11.07
 
@@ -40,9 +40,6 @@ fi
 # Step 2: Prompt the User to Set Up Autologin Manually
 zenity --info --title="Autologin Setup Required" --text="To enable autologin for the kiosk account, please:\n\n1. Open 'Settings'.\n2. Search for 'Users'.\n3. Select the kiosk user: $KIOSK_USER.\n4. Unlock (if required) and enable 'Automatic Login'.\n\nClick OK once done." --ok-label="OK"
 
-# Confirm that the user has set up autologin
-zenity --info --title="Autologin Confirmation" --text="Click OK if you have completed the autologin setup for the kiosk user."
-
 # Step 3: Install necessary tools if missing
 if ! command -v xinput &> /dev/null; then
     echo "xinput not found. Installing xinput..."
@@ -57,9 +54,7 @@ fi
 # Step 4: Disable GNOME Notifications and Update Notifications for Kiosk User
 echo "Disabling notifications and update prompts for kiosk user..."
 sudo -u "$KIOSK_USER" dbus-launch gsettings set org.gnome.desktop.notifications show-banners false
-sudo -u "$KIOSK_USER" dbus-launch gsettings set org.gnome.software download-updates false
-sudo -u "$KIOSK_USER" dbus-launch gsettings set org.gnome.software allow-updates false
-sudo -u "$KIOSK_USER" dbus-launch gsettings set org.gnome.software enable-notifications false
+echo 'APT::Periodic::Update-Package-Lists "0";' | sudo tee /etc/apt/apt.conf.d/10periodic > /dev/null
 
 # Step 5: Disable Initial Setup Prompts and Set Default GNOME Preferences for Kiosk User
 echo "Disabling GNOME initial setup for $KIOSK_USER..."
@@ -78,71 +73,7 @@ if ! command -v firefox &> /dev/null; then
     apt update && apt install -y firefox
 fi
 
-# Step 7: Prompt for Update Option (Firefox, OS, or Kiosk Mode)
-UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
-    --text="Do you want to update Firefox, update the operating system, or continue to kiosk mode?" \
-    --radiolist --column="Select" --column="Option" \
-    FALSE "Firefox" FALSE "OS" TRUE "Kiosk")
-
-# Step 8: Handle User Selection for Update Option
-if [[ "$UPDATE_OPTION" == "Firefox" ]]; then
-    # Start the apt install in the background
-    sudo apt install -y firefox &> /dev/null &
-    APT_PID=$!  # Capture the process ID of the apt install command
-    
-    # Display progress while apt is running
-    (
-        echo "10"; echo "# Preparing to install Firefox..."
-        sleep 1
-        
-        # Loop until apt completes
-        while kill -0 $APT_PID 2>/dev/null; do
-            echo "50"; echo "# Installing Firefox... Please wait"
-            sleep 5  # Ensure progress bar is visible for 5 seconds
-        done
-        
-        echo "100"; echo "# Firefox update complete."
-    ) | zenity --progress --title="Kiosk Setup - Firefox Update" --text="Updating Firefox. Please wait..." --percentage=0 --auto-close --no-cancel --width=300
-
-    # Display Firefox version and installation date after update
-    FIREFOX_VERSION=$(firefox --version)
-    INSTALL_DATE=$(date +"%Y-%m-%d %H:%M:%S")
-    zenity --info --title="Kiosk Setup - Update Complete" --text="Firefox update complete:\n\nVersion: $FIREFOX_VERSION\nInstalled on: $INSTALL_DATE"
-
-elif [[ "$UPDATE_OPTION" == "OS" ]]; then
-    # OS update option: Notify and start system update, then restart
-    zenity --info --title="Kiosk Setup - OS Update" --text="The system will now update the OS packages. After the update, please restart to complete the process."
-    
-    sudo apt update && sudo apt -y upgrade && sudo apt -y autoremove
-    zenity --info --title="Kiosk Setup - OS Update Complete" --text="System update is complete. Please restart the system to continue with kiosk mode."
-    exit 0  # Exit to allow a manual restart for the changes to apply
-
-elif [[ "$UPDATE_OPTION" == "Kiosk" ]]; then
-    # Kiosk mode option: Prompt for URL
-    URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:" --entry-text="https://example.splunkcloud.com" --no-cancel)
-    if [[ -z "$URL" ]]; then
-        zenity --warning --title="Kiosk Setup" --text="No URL provided. Exiting setup."
-        exit 1
-    fi
-
-    # Launch Firefox in Kiosk Mode with the specified URL and wait 3 seconds before showing confirmation
-    firefox --kiosk "$URL" &
-    sleep 3
-
-    # Confirmation to disable inputs once URL is loaded
-    zenity --info --title="Kiosk Mode - Confirm" --text="Once the page is loaded and authentication (if any) is complete, click OK to disable keyboard and mouse."
-
-    # Disable all input devices (keyboard, mouse, etc.) to prevent exiting kiosk mode
-    for id in $(xinput --list --id-only); do
-        xinput disable "$id"
-    done
-
-    # Disable all USB ports except for critical ones
-    echo "Disabling USB storage devices..."
-    sudo rmmod usb_storage  # Disables all USB storage devices
-fi
-
-# Step 9: Caffeine to Prevent Sleep/Dimming
+# Step 7: Install Caffeine to Prevent Sleep/Dimming
 echo "Installing and configuring Caffeine to prevent sleep and dimming..."
 apt-get install -y caffeine
 
@@ -166,13 +97,13 @@ Name=Caffeine
 Comment=Prevent the system from going to sleep or dimming
 EOF
 
-# Step 10: Full-Disk Encryption (Warn Only with OK Button)
+# Step 8: Check for Full-Disk Encryption (Warn Only with OK Button)
 echo "Checking for full-disk encryption..."
 if ! lsblk -o name,type,fstype,mountpoint | grep -q "crypto_LUKS"; then
     zenity --info --title="Kiosk Setup - Security Notice" --text="Full-disk encryption (FDE) is not enabled. FDE can only be set up during OS installation, but it is not required to proceed." --ok-label="OK"
 fi
 
-# Step 11: Disable SSH Service if Installed
+# Step 9: Disable SSH Service if Installed
 if systemctl list-units --type=service | grep -q "ssh.service"; then
     echo "Disabling SSH service..."
     systemctl disable --now ssh
@@ -180,5 +111,79 @@ else
     echo "SSH service not found, skipping disable step."
 fi
 
-# Notify for system restart to apply all changes
+# Step 10: Restart Prompt
 zenity --info --title="Kiosk Setup Complete" --text="Kiosk setup is complete. Please restart the system to apply all changes."
+
+# ------- Log in as Kiosk User, Launch Kiosk Mode ------- #
+
+# Step 11: Create Kiosk Mode Script with Firefox Update, Input Lockdown, USB Disable, and URL Prompt
+KIOSK_SCRIPT_PATH="/home/$KIOSK_USER/start-kiosk.sh"
+
+cat << 'EOF' > "$KIOSK_SCRIPT_PATH"
+#!/bin/bash
+# start-kiosk.sh - Kiosk Mode with Firefox Update, URL Prompt, Input Lockdown, and USB Disable
+
+# Prompt to Update Firefox or OS, or go straight to Kiosk Mode
+UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
+    --text="Do you want to update Firefox, update the operating system, or continue to kiosk mode?" \
+    --radiolist --column="Select" --column="Option" \
+    FALSE "Firefox" FALSE "OS" TRUE "Kiosk")
+
+if [[ "$UPDATE_OPTION" == "Firefox" ]]; then
+    sudo apt install -y firefox &> /dev/null &
+    APT_PID=$!
+    (
+        echo "10"; echo "# Preparing to install Firefox..."
+        while kill -0 $APT_PID 2>/dev/null; do
+            echo "50"; echo "# Installing Firefox... Please wait"
+            sleep 5
+        done
+        echo "100"; echo "# Firefox update complete."
+    ) | zenity --progress --title="Kiosk Setup - Firefox Update" --text="Updating Firefox. Please wait..." --percentage=0 --auto-close --no-cancel --width=300
+    FIREFOX_VERSION=$(firefox --version)
+    INSTALL_DATE=$(date +"%Y-%m-%d %H:%M:%S")
+    zenity --info --title="Kiosk Setup - Update Complete" --text="Firefox update complete:\n\nVersion: $FIREFOX_VERSION\nInstalled on: $INSTALL_DATE"
+
+elif [[ "$UPDATE_OPTION" == "OS" ]]; then
+    zenity --info --title="Kiosk Setup - OS Update" --text="The system will now update. Restart after completion."
+    sudo apt update && sudo apt -y upgrade && sudo apt -y autoremove
+    exit 0
+elif [[ "$UPDATE_OPTION" == "Kiosk" ]]; then
+    URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:" --entry-text="https://example.splunkcloud.com" --no-cancel)
+    if [[ -z "$URL" ]]; then
+        zenity --warning --title="Kiosk Setup" --text="No URL provided. Exiting setup."
+        exit 1
+    fi
+
+    firefox --kiosk "$URL" &
+    sleep 3
+
+    zenity --info --title="Kiosk Mode - Confirm" --text="Once the page is loaded, click OK to disable keyboard and mouse."
+    for id in $(xinput --list --id-only); do
+        xinput disable "$id"
+    done
+
+    echo "Disabling USB storage devices..."
+    sudo rmmod usb_storage
+fi
+EOF
+
+chmod +x "$KIOSK_SCRIPT_PATH"
+chown "$KIOSK_USER":"$KIOSK_USER" "$KIOSK_SCRIPT_PATH"
+
+# Configuring the kiosk script to run on startup
+cat << EOF > "$AUTOSTART_DIR/kiosk.desktop"
+[Desktop Entry]
+Type=Application
+Exec=$KIOSK_SCRIPT_PATH
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=KioskMode
+Comment=Launch Firefox in kiosk mode
+EOF
+
+chown -R "$KIOSK_USER":"$KIOSK_USER" "$AUTOSTART_DIR"
+
+# Final confirmation to restart system to apply changes
+zenity --info --title="Kiosk Setup Complete" --text="Kiosk setup complete. Please restart the system for changes to take effect."
