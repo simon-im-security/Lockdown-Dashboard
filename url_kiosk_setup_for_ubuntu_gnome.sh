@@ -1,5 +1,5 @@
 #!/bin/bash
-# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script with Autologin Instructions, Firefox/OS Update Options, URL Memory, Auto-Timeout, Input Lockdown, USB Disable, Caffeine, FDE Check, and SSH Disable
+# create-kiosk-setup.sh - Ubuntu GNOME Kiosk Setup Script with Autologin Instructions, Update Options, URL Memory, Auto-Timeout, Input Lockdown, USB Disable, Caffeine, FDE Check, and SSH Disable
 # Author: Simon .I
 # Version: 2024.11.07
 
@@ -15,21 +15,16 @@ if ! grep -qi "ubuntu" /etc/os-release || ! echo "$XDG_CURRENT_DESKTOP" | grep -
     exit 1
 fi
 
-# Variables for storing user-configured settings
-CONFIG_FILE="/home/$KIOSK_USER/.kiosk_config"
-URL_KEY="last_url"
+# Define file paths for config
+KIOSK_CONFIG_DIR="/home/$KIOSK_USER/.kiosk_config"
+LAST_URL_FILE="$KIOSK_CONFIG_DIR/last_url"
 
-# Function to save configuration
-save_config() {
-    echo "$URL_KEY=$1" > "$CONFIG_FILE"
-}
-
-# Function to load configuration
-load_config() {
-    if [[ -f "$CONFIG_FILE" ]]; then
-        source "$CONFIG_FILE"
-    fi
-}
+# Load the last URL if available
+if [[ -f "$LAST_URL_FILE" ]]; then
+    last_url=$(cat "$LAST_URL_FILE")
+else
+    last_url="https://example.splunkcloud.com"
+fi
 
 # Step 1: Prompt for Kiosk Username and Password
 KIOSK_USER=$(zenity --entry --title="Kiosk Setup - Username" --text="Enter the username for the kiosk account:")
@@ -94,78 +89,21 @@ if ! command -v firefox &> /dev/null; then
     apt update && apt install -y firefox
 fi
 
-# Step 7: Install Caffeine to Prevent Sleep/Dimming
-echo "Installing and configuring Caffeine to prevent sleep and dimming..."
-apt-get install -y caffeine
-
-# Create Caffeine startup script
-CAFFEINE_SCRIPT_PATH="/home/$KIOSK_USER/start-caffeine.sh"
-echo "caffeine &" > "$CAFFEINE_SCRIPT_PATH"
-chmod +x "$CAFFEINE_SCRIPT_PATH"
-chown "$KIOSK_USER":"$KIOSK_USER" "$CAFFEINE_SCRIPT_PATH"
-
-# Add Caffeine to autostart
-AUTOSTART_DIR="/home/$KIOSK_USER/.config/autostart"
-mkdir -p "$AUTOSTART_DIR"
-cat << EOF > "$AUTOSTART_DIR/caffeine.desktop"
-[Desktop Entry]
-Type=Application
-Exec=$CAFFEINE_SCRIPT_PATH
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-Name=Caffeine
-Comment=Prevent the system from going to sleep or dimming
-EOF
-
-# Step 8: Check for Full-Disk Encryption (Warn Only with OK Button)
-echo "Checking for full-disk encryption..."
-if ! lsblk -o name,type,fstype,mountpoint | grep -q "crypto_LUKS"; then
-    zenity --info --title="Kiosk Setup - Security Notice" --text="Full-disk encryption (FDE) is not enabled. FDE can only be set up during OS installation, but it is not required to proceed." --ok-label="OK"
-fi
-
-# Step 9: Disable SSH Service if Installed
-if systemctl list-units --type=service | grep -q "ssh.service"; then
-    echo "Disabling SSH service..."
-    systemctl disable --now ssh
-else
-    echo "SSH service not found, skipping disable step."
-fi
-
-# Step 10: Create Kiosk Mode Script with URL Persistence, Auto-Timeout, Firefox Update, Input Lockdown, and USB Disable
-KIOSK_SCRIPT_PATH="/home/$KIOSK_USER/start-kiosk.sh"
-
-cat << 'EOF' > "$KIOSK_SCRIPT_PATH"
-#!/bin/bash
-# start-kiosk.sh - Kiosk Mode with URL Persistence, Auto-Timeout, Firefox Update, Input Lockdown, and USB Disable
-
-CONFIG_FILE="$HOME/.kiosk_config"
-URL_KEY="last_url"
-
-# Function to save configuration
-save_config() {
-    echo "$URL_KEY=$1" > "$CONFIG_FILE"
-}
-
-# Load configuration
-load_config() {
-    if [[ -f "$CONFIG_FILE" ]]; then
-        source "$CONFIG_FILE"
-    fi
-}
-
-# Load previous URL if available
-load_config
-
-# Prompt to Update Firefox or OS, or go straight to Kiosk Mode
+# Step 7: Prompt for Update Option (Firefox, OS, or Kiosk Mode) with Timeout to Default to Kiosk Mode
 UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
     --text="Do you want to update Firefox, update the operating system, or continue to kiosk mode?" \
     --radiolist --column="Select" --column="Option" \
-    FALSE "Firefox" FALSE "OS" TRUE "Kiosk")
+    FALSE "Firefox" FALSE "OS" TRUE "Kiosk" --timeout=300)
 
-# Handle update selection
-case $UPDATE_OPTION in
+# Default to Kiosk if no option is chosen within the timeout
+if [[ -z "$UPDATE_OPTION" ]]; then
+    UPDATE_OPTION="Kiosk"
+fi
+
+# Step 8: Handle User Selection for Update Option
+case "$UPDATE_OPTION" in
     "Firefox")
+        # Firefox update with progress
         sudo apt install -y firefox &> /dev/null &
         APT_PID=$!
         (
@@ -176,8 +114,14 @@ case $UPDATE_OPTION in
             done
             echo "100"; echo "# Firefox update complete."
         ) | zenity --progress --title="Kiosk Setup - Firefox Update" --text="Updating Firefox. Please wait..." --percentage=0 --auto-close --no-cancel --width=300
+
+        # Display Firefox version and installation date
+        FIREFOX_VERSION=$(firefox --version)
+        INSTALL_DATE=$(date +"%Y-%m-%d %H:%M:%S")
+        zenity --info --title="Kiosk Setup - Update Complete" --text="Firefox update complete:\n\nVersion: $FIREFOX_VERSION\nInstalled on: $INSTALL_DATE"
         ;;
     "OS")
+        # OS update with notification to restart afterward
         zenity --info --title="Kiosk Setup - OS Update" --text="System updating. Please restart once completed."
         sudo apt update && sudo apt -y upgrade && sudo apt -y autoremove
         zenity --info --title="Kiosk Setup - OS Update Complete" --text="System update complete. Restart the system to continue with kiosk mode."
@@ -185,11 +129,18 @@ case $UPDATE_OPTION in
         ;;
 esac
 
-# Prompt for URL input, defaulting to last URL if present
-URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:" --entry-text="${last_url:-https://example.splunkcloud.com}" --no-cancel)
+# Step 9: Prompt for URL input with a Timeout and Default to Last URL if Present
+URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:" \
+    --entry-text="$last_url" --no-cancel --timeout=300)
+
+# Default to last URL if no input within timeout
+if [[ -z "$URL" ]]; then
+    URL="$last_url"
+fi
 
 # Save and launch URL in kiosk mode
-save_config "$URL"
+mkdir -p "$KIOSK_CONFIG_DIR"
+echo "$URL" > "$LAST_URL_FILE"
 firefox --kiosk "$URL" &
 sleep 3
 
@@ -200,11 +151,21 @@ done
 
 # Disable all USB ports except for critical ones
 sudo rmmod usb_storage
-EOF
 
-chmod +x "$KIOSK_SCRIPT_PATH"
-chown "$KIOSK_USER":"$KIOSK_USER" "$KIOSK_SCRIPT_PATH"
+# Step 10: Caffeine to Prevent Sleep/Dimming
+echo "Installing and configuring Caffeine to prevent sleep and dimming..."
+apt-get install -y caffeine
 
-# Step 11: Prompt for final restart to apply all settings
+# Step 11: Full-Disk Encryption (Warn Only with OK Button)
+echo "Checking for full-disk encryption..."
+if ! lsblk -o name,type,fstype,mountpoint | grep -q "crypto_LUKS"; then
+    zenity --info --title="Kiosk Setup - Security Notice" --text="Full-disk encryption (FDE) is not enabled. FDE can only be set up during OS installation, but it is not required to proceed." --ok-label="OK"
+fi
+
+# Step 12: Disable SSH Service if Installed
+if systemctl list-units --type=service | grep -q "ssh.service"; then
+    systemctl disable --now ssh
+fi
+
+# Notify for restart to apply all changes
 zenity --info --title="Kiosk Setup Complete" --text="Kiosk setup is complete. Please restart the system to apply all changes."
-reboot
