@@ -29,14 +29,13 @@ if [[ -z "$KIOSK_PASSWORD" ]]; then
     exit 1
 fi
 
-# Create or update the kiosk user account
+# Create or update the kiosk user account as a standard user
 if id "$KIOSK_USER" &>/dev/null; then
     echo "User '$KIOSK_USER' already exists."
 else
     useradd -m -s /bin/bash "$KIOSK_USER"
     echo "$KIOSK_USER:$KIOSK_PASSWORD" | chpasswd
-    usermod -aG sudo "$KIOSK_USER"
-    echo "Kiosk user created with username: $KIOSK_USER"
+    echo "Kiosk user created with username: $KIOSK_USER as a standard user."
 fi
 
 # GDM Configuration for Autologin
@@ -81,8 +80,22 @@ cat << 'EOF' > "$KIOSK_SCRIPT_PATH"
 # Prompt to Update Firefox
 if zenity --question --title="Kiosk Setup - Firefox Update" --text="Do you want to update Firefox before launching the kiosk mode?"; then
     zenity --info --title="Kiosk Setup - Updating Firefox" --text="Updating Firefox. Please wait..."
+    
+    # Start the apt install in the background
+    sudo apt install -y firefox &> /dev/null &
+    APT_PID=$!  # Capture the process ID of the apt install command
+    
+    # Display progress while apt is running
     (
-        echo "20"; echo "# Installing latest Firefox..."; sudo apt install -y firefox
+        echo "10"; echo "# Preparing to install Firefox..."
+        sleep 1
+        
+        # Loop until apt completes
+        while kill -0 $APT_PID 2>/dev/null; do
+            echo "50"; echo "# Installing Firefox... Please wait"
+            sleep 5  # Adjust as needed for apt duration
+        done
+        
         echo "100"; echo "# Firefox update complete."
     ) | zenity --progress --title="Kiosk Setup - Firefox Update" --text="Updating Firefox. Please wait..." --percentage=0 --auto-close --no-cancel --width=300
 
@@ -91,11 +104,6 @@ if zenity --question --title="Kiosk Setup - Firefox Update" --text="Do you want 
     INSTALL_DATE=$(date +"%Y-%m-%d %H:%M:%S")
     zenity --info --title="Kiosk Setup - Update Complete" --text="Firefox update complete:\n\nVersion: $FIREFOX_VERSION\nInstalled on: $INSTALL_DATE"
 fi
-
-# Enable all inputs on startup to allow for configuration
-for id in $(xinput --list --id-only); do
-    xinput enable "$id"
-done
 
 # Prompt for URL for kiosk mode without a cancel button
 URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:" --entry-text="https://example.splunkcloud.com" --no-cancel)
