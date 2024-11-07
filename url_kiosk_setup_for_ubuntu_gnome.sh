@@ -139,16 +139,19 @@ stage13_setup_services() {
     cat << 'EOF' > "/home/$KIOSK_USER/first-login.sh"
 #!/bin/bash
 
+# Allow display access for the kiosk user
+su "$USER" -c "xhost local:$USER"
+
 zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." --ok-label="OK" --cancel-label="Cancel" || exit 0
 
 UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
     --text="Would you like to update Firefox, the OS, or skip updates?\n\n*Default to skip after 5 minutes.*" \
-    --radiolist --column="Select" --column="Option" FALSE "Firefox" FALSE "OS" TRUE "Skip" --timeout=300 --width=400 --height=250)
+    --radiolist --column="Select" --column="Option" FALSE "Firefox" FALSE "OS" TRUE "Skip" --timeout=300 --width=600 --height=400)
 
 case "$UPDATE_OPTION" in
     "Firefox")
         systemctl --user start firefox-update.service
-        zenity --progress --title="Updating Firefox" --text="Updating Firefox... Please wait." --percentage=0 --pulsate --no-cancel --width=400
+        zenity --progress --title="Updating Firefox" --text="Updating Firefox... Please wait." --percentage=0 --pulsate --no-cancel --width=600
         ;;
     "OS")
         zenity --info --title="Updating OS" --text="Updating system. Please wait..."
@@ -166,10 +169,10 @@ sleep 3  # Wait for 3 seconds after URL entry
 
 zenity --info --title="Lock System" --text="Click OK to lock the system and disable peripherals." --ok-label="OK"
 
+# Disable input devices and USB storage
 for id in $(xinput --list --id-only); do
-    xinput disable "$id"
+    sudo xinput disable "$id"
 done
-
 sudo modprobe -r usb_storage
 EOF
 
