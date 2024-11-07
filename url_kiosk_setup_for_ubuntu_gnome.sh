@@ -61,10 +61,11 @@ stage4_suppress_initial_setup() {
     chown -R "$KIOSK_USER":"$KIOSK_USER" "/home/$KIOSK_USER/.config"
 }
 
-# Stage 5: Prompt the user to set up autologin manually
+# Stage 5: Enable autologin
 stage5_autologin_setup() {
-    log_info "Stage 5: Autologin setup instructions"
-    zenity --info --title="Autologin Setup Required" --text="To enable autologin for the kiosk account, please:\n\n1. Open 'Settings'.\n2. Search for 'Users'.\n3. Select the kiosk user: $KIOSK_USER.\n4. Unlock (if required) and enable 'Automatic Login'.\n\nClick OK once done."
+    log_info "Stage 5: Enabling autologin for kiosk user"
+    sed -i "s/^#  AutomaticLoginEnable = true/AutomaticLoginEnable = true/" /etc/gdm3/custom.conf
+    sed -i "s/^#  AutomaticLogin = .*/AutomaticLogin = $KIOSK_USER/" /etc/gdm3/custom.conf
 }
 
 # Stage 6: Install necessary tools
@@ -90,60 +91,63 @@ stage8_set_gnome_preferences() {
     sudo -u "$KIOSK_USER" dbus-launch gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout 0
 }
 
-# Stage 9: Ensure Firefox is installed
-stage9_install_firefox() {
-    log_info "Stage 9: Ensuring Firefox is installed"
-    if ! command -v firefox &>/dev/null; then
-        apt install -y firefox | tee -a "$LOG_FILE"
-    fi
-}
+# Stage 9: Create the GNOME Kiosk Session
+stage9_create_kiosk_session() {
+    log_info "Stage 9: Creating custom GNOME kiosk session"
 
-# Stage 10: Install and configure Caffeine
-stage10_install_caffeine() {
-    log_info "Stage 10: Installing and configuring Caffeine"
-    apt install -y caffeine | tee -a "$LOG_FILE"
-    mkdir -p "/home/$KIOSK_USER/.config/autostart"
-    cat << EOF > "/home/$KIOSK_USER/.config/autostart/caffeine.desktop"
+    # Create kiosk session file
+    cat << EOF > /usr/share/xsessions/kiosk.desktop
 [Desktop Entry]
+Name=Kiosk
+Comment=Custom kiosk session
+Exec=gnome-session --session=kiosk
 Type=Application
-Exec=caffeine
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-Name=Caffeine
-Comment=Prevent sleep or dimming
+DesktopNames=Kiosk;GNOME
+EOF
+
+    # Define the custom session
+    cat << EOF > /usr/share/gnome-session/sessions/kiosk.session
+[GNOME Session]
+Name=Kiosk
+RequiredComponents=run-my-app;
+EOF
+
+    # Set the kiosk session as the default session for the user
+    mkdir -p /var/lib/AccountsService/users/
+    cat << EOF > /var/lib/AccountsService/users/$KIOSK_USER
+[User]
+XSession=kiosk
+SystemAccount=false
 EOF
 }
 
-# Stage 11: Check Full Disk Encryption (optional)
-stage11_check_fde() {
-    log_info "Stage 11: Checking Full Disk Encryption"
-    if ! lsblk -o name,type,fstype,mountpoint | grep -q "crypto_LUKS"; then
-        zenity --info --title="Security Notice" --text="FDE is not enabled. Enabling FDE is recommended to protect data in case of device loss or theft." | tee -a "$LOG_FILE"
-    fi
+# Stage 10: Create a Desktop Entry to Run the Kiosk Application
+stage10_create_application_entry() {
+    log_info "Stage 10: Creating desktop entry for the kiosk application"
+    cat << EOF > /usr/share/applications/run-my-app.desktop
+[Desktop Entry]
+Name=My-Application
+Exec=bash /home/$KIOSK_USER/first-login.sh
+Type=Application
+NoDisplay=true
+EOF
 }
 
-# Stage 12: Disable SSH service
-stage12_disable_ssh() {
-    log_info "Stage 12: Disabling SSH service if running"
-    if systemctl is-active --quiet ssh; then
-        systemctl disable --now ssh | tee -a "$LOG_FILE"
-    fi
-}
-
-# Stage 13: Setup first-login and Firefox update in first-login script
-stage13_setup_services() {
-    log_info "Stage 13: Setting up first-login script"
+# Stage 11: Create the First-Login Script with Zenity Messages and Logic
+stage11_create_first_login_script() {
+    log_info "Stage 11: Setting up the first-login script for kiosk"
 
     # Create first-login script
     cat << 'EOF' > "/home/$KIOSK_USER/first-login.sh"
 #!/bin/bash
 
-# Allow display access for the kiosk user
+# Allow access to the display for xinput commands
 xhost +local:
 
+# Welcome prompt
 zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." --ok-label="OK" --cancel-label="Cancel" || exit 0
 
+# Update options prompt
 UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
     --text="Would you like to update Firefox, the OS, or skip updates?\n\n*Default to skip after 5 minutes.*" \
     --radiolist --column="Select" --column="Option" FALSE "Firefox" FALSE "OS" TRUE "Skip" --timeout=300 --width=600 --height=400)
@@ -165,42 +169,26 @@ case "$UPDATE_OPTION" in
         ;;
 esac
 
-# Prompt for URL to start in kiosk mode
+# URL prompt for kiosk mode
 URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:")
 echo "$URL" > "$HOME/.kiosk_url"
 firefox --kiosk "$URL" &
-sleep 3  # Wait for 3 seconds after URL entry
+sleep 3
 
+# Lock system prompt
 zenity --info --title="Lock System" --text="Click OK to lock the system and disable peripherals." --ok-label="OK"
 
-# Disable input devices and USB storage
+# Disable input devices
 for id in $(xinput --list --id-only); do
-    sudo xinput disable "$id"
+    xinput disable "$id"
 done
+
+# Disable USB storage
 sudo modprobe -r usb_storage
 EOF
 
     chmod +x "/home/$KIOSK_USER/first-login.sh"
     chown "$KIOSK_USER":"$KIOSK_USER" "/home/$KIOSK_USER/first-login.sh"
-
-    # Create systemd service for the first login
-    cat << EOF > "/etc/systemd/system/kiosk-first-login.service"
-[Unit]
-Description=First Login Kiosk Setup
-After=graphical-session.target display-manager.service
-
-[Service]
-User=$KIOSK_USER
-Type=simple
-ExecStart=/bin/bash /home/$KIOSK_USER/first-login.sh
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/$KIOSK_USER/.Xauthority
-
-[Install]
-WantedBy=default.target
-EOF
-
-    systemctl enable kiosk-first-login.service
 }
 
 # Execute all stages
@@ -212,10 +200,8 @@ stage5_autologin_setup
 stage6_install_tools
 stage7_disable_notifications
 stage8_set_gnome_preferences
-stage9_install_firefox
-stage10_install_caffeine
-stage11_check_fde
-stage12_disable_ssh
-stage13_setup_services
+stage9_create_kiosk_session
+stage10_create_application_entry
+stage11_create_first_login_script
 
 zenity --info --title="Kiosk Setup Complete" --text="Initial setup complete. Please restart the system and log in as the kiosk user ($KIOSK_USER) to continue." | tee -a "$LOG_FILE"
