@@ -119,7 +119,7 @@ EOF
 stage11_check_fde() {
     log_info "Stage 11: Checking Full Disk Encryption"
     if ! lsblk -o name,type,fstype,mountpoint | grep -q "crypto_LUKS"; then
-        zenity --info --title="Security Notice" --text="Full Disk Encryption (FDE) is not enabled. Enabling FDE is highly recommended to protect data in case of device loss or theft. Consider enabling FDE to enhance data security. Please restart the system afterward for autologin to initiate." | tee -a "$LOG_FILE"
+        zenity --info --title="Security Notice" --text="FDE is not enabled. Enabling FDE is recommended to protect data in case of device loss or theft." | tee -a "$LOG_FILE"
     fi
 }
 
@@ -139,18 +139,14 @@ stage13_setup_services() {
     cat << 'EOF' > "/home/$KIOSK_USER/first-login.sh"
 #!/bin/bash
 
-# Welcome prompt with "Cancel" and "OK" options
 zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." --ok-label="OK" --cancel-label="Cancel" || exit 0
 
-# Update options prompt with larger window size
 UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
     --text="Would you like to update Firefox, the OS, or skip updates?\n\n*Default to skip after 5 minutes.*" \
     --radiolist --column="Select" --column="Option" FALSE "Firefox" FALSE "OS" TRUE "Skip" --timeout=300 --width=400 --height=250)
 
-# Execute based on choice
 case "$UPDATE_OPTION" in
     "Firefox")
-        # Start Firefox update service and display progress
         systemctl --user start firefox-update.service
         zenity --progress --title="Updating Firefox" --text="Updating Firefox... Please wait." --percentage=0 --pulsate --no-cancel --width=400
         ;;
@@ -163,33 +159,28 @@ case "$UPDATE_OPTION" in
         ;;
 esac
 
-# Prompt for URL to start in kiosk mode
 URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:")
 echo "$URL" > "$HOME/.kiosk_url"
 firefox --kiosk "$URL" &
 sleep 3  # Wait for 3 seconds after URL entry
 
-# Lock system prompt (OK only)
 zenity --info --title="Lock System" --text="Click OK to lock the system and disable peripherals." --ok-label="OK"
 
-# Disable all input devices using xinput
 for id in $(xinput --list --id-only); do
     xinput disable "$id"
 done
 
-# Disable USB storage
 sudo modprobe -r usb_storage
 EOF
 
-    # Make script executable and set ownership
     chmod +x "/home/$KIOSK_USER/first-login.sh"
     chown "$KIOSK_USER":"$KIOSK_USER" "/home/$KIOSK_USER/first-login.sh"
 
-    # Create systemd service to run on login
+    # Create systemd service for the first login
     cat << EOF > "/etc/systemd/system/kiosk-first-login.service"
 [Unit]
 Description=First Login Kiosk Setup
-After=graphical-session.target
+After=graphical-session.target display-manager.service
 
 [Service]
 User=$KIOSK_USER
@@ -216,7 +207,6 @@ Type=oneshot
 WantedBy=default.target
 EOF
 
-    # Enable services for the kiosk user
     systemctl enable kiosk-first-login.service
     systemctl enable firefox-update.service
 }
