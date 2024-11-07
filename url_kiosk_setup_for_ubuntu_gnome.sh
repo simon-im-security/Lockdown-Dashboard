@@ -131,50 +131,77 @@ stage12_disable_ssh() {
     fi
 }
 
-# Stage 13: Setup first-login script and URL prompt
-stage13_setup_first_login() {
-    log_info "Stage 13: Setting up first login script"
+# Stage 13: Setup first-login service with systemd to avoid terminal dependency
+stage13_setup_first_login_service() {
+    log_info "Stage 13: Setting up first login service with systemd"
 
-    # Create a flag to indicate first login setup
-    echo "first_login=true" > "/home/$KIOSK_USER/.first_login_flag"
+    # Create first-login script
+    cat << 'EOF' > "/home/$KIOSK_USER/first-login.sh"
+#!/bin/bash
 
-    # Append first-login code to .bashrc to prompt for URL and updates on first login
-    cat << 'EOF' >> "/home/$KIOSK_USER/.bashrc"
-if [ -f "$HOME/.first_login_flag" ]; then
-    zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." || exit 0
+# Welcome prompt
+zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." || exit 0
 
-    # Ask if user wants to update OS or Firefox
-    UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
-        --text="Would you like to update Firefox, the OS, or skip updates?\n\n*Default to skip after 5 minutes.*" \
-        --radiolist --column="Select" --column="Option" FALSE "Firefox" FALSE "OS" TRUE "Skip" --timeout=300)
+# Update options prompt
+UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
+    --text="Would you like to update Firefox, the OS, or skip updates?\n\n*Default to skip after 5 minutes.*" \
+    --radiolist --column="Select" --column="Option" FALSE "Firefox" FALSE "OS" TRUE "Skip" --timeout=300)
 
-    case "$UPDATE_OPTION" in
-        "Firefox")
-            zenity --info --title="Updating Firefox" --text="Updating Firefox. Please wait..."
-            sudo apt install -y firefox
-            zenity --info --title="Update Complete" --text="Firefox update complete."
-            ;;
-        "OS")
-            zenity --info --title="Updating OS" --text="Updating system. Please wait..."
-            sudo apt update && sudo apt -y upgrade && sudo apt -y autoremove
-            zenity --info --title="Update Complete" --text="OS update complete. Restart recommended."
-            ;;
-        "Skip"|"")
-            ;;
-    esac
+# Execute based on choice
+case "$UPDATE_OPTION" in
+    "Firefox")
+        zenity --info --title="Updating Firefox" --text="Updating Firefox. Please wait..."
+        sudo apt install -y firefox
+        zenity --info --title="Update Complete" --text="Firefox update complete."
+        ;;
+    "OS")
+        zenity --info --title="Updating OS" --text="Updating system. Please wait..."
+        sudo apt update && sudo apt -y upgrade && sudo apt -y autoremove
+        zenity --info --title="Update Complete" --text="OS update complete. Restart recommended."
+        ;;
+    "Skip"|"")
+        ;;
+esac
 
-    # Prompt for URL to start in kiosk mode
-    URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:")
-    echo "$URL" > "$HOME/.kiosk_url"
-    firefox --kiosk "$URL" &
+# Prompt for URL to start in kiosk mode
+URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:")
+echo "$URL" > "$HOME/.kiosk_url"
+firefox --kiosk "$URL" &
 
-    # Remove the first login flag to prevent re-running on subsequent logins
-    rm -f "$HOME/.first_login_flag"
-fi
+# Final lock confirmation
+zenity --question --title="Lock System" --text="Ready to lock the system? USB devices and peripherals will be disabled." || exit 0
+
+# Disable all input devices using xinput
+for id in $(xinput --list --id-only); do
+    xinput disable "$id"
+done
+
+# Disable USB storage
+sudo modprobe -r usb_storage
 EOF
 
-    # Set ownership for the first login flag and updated .bashrc
-    chown "$KIOSK_USER":"$KIOSK_USER" "/home/$KIOSK_USER/.first_login_flag" "/home/$KIOSK_USER/.bashrc"
+    # Make script executable and set ownership
+    chmod +x "/home/$KIOSK_USER/first-login.sh"
+    chown "$KIOSK_USER":"$KIOSK_USER" "/home/$KIOSK_USER/first-login.sh"
+
+    # Create systemd service to run on login
+    cat << EOF > "/etc/systemd/system/kiosk-first-login.service"
+[Unit]
+Description=First Login Kiosk Setup
+After=graphical.target
+
+[Service]
+User=$KIOSK_USER
+ExecStart=/home/$KIOSK_USER/first-login.sh
+Type=oneshot
+RemainAfterExit=true
+
+[Install]
+WantedBy=default.target
+EOF
+
+    # Enable systemd service for the kiosk user
+    systemctl enable kiosk-first-login.service
 }
 
 # Execute all stages
@@ -190,6 +217,6 @@ stage9_install_firefox
 stage10_install_caffeine
 stage11_check_fde
 stage12_disable_ssh
-stage13_setup_first_login
+stage13_setup_first_login_service
 
 zenity --info --title="Kiosk Setup Complete" --text="Initial setup complete. Log in as the kiosk user to continue with configuration." | tee -a "$LOG_FILE"
