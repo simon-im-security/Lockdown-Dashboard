@@ -119,7 +119,7 @@ EOF
 stage11_check_fde() {
     log_info "Stage 11: Checking Full Disk Encryption"
     if ! lsblk -o name,type,fstype,mountpoint | grep -q "crypto_LUKS"; then
-        zenity --info --title="Security Notice" --text="Full-disk encryption (FDE) is not enabled. Recommended but optional." | tee -a "$LOG_FILE"
+        zenity --info --title="Security Notice" --text="Full Disk Encryption (FDE) is not enabled. Enabling FDE is highly recommended to protect data in case of device loss or theft. Consider enabling FDE to enhance data security." | tee -a "$LOG_FILE"
     fi
 }
 
@@ -139,8 +139,8 @@ stage13_setup_first_login_service() {
     cat << 'EOF' > "/home/$KIOSK_USER/first-login.sh"
 #!/bin/bash
 
-# Welcome prompt
-zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." || exit 0
+# Welcome prompt with "Cancel" and "OK" options
+zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." --ok-label="OK" --cancel-label="Cancel" || exit 0
 
 # Update options prompt
 UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
@@ -188,13 +188,14 @@ EOF
     cat << EOF > "/etc/systemd/system/kiosk-first-login.service"
 [Unit]
 Description=First Login Kiosk Setup
-After=graphical.target
+After=graphical-session.target
 
 [Service]
 User=$KIOSK_USER
-ExecStart=/home/$KIOSK_USER/first-login.sh
-Type=oneshot
-RemainAfterExit=true
+Type=simple
+ExecStart=/bin/bash /home/$KIOSK_USER/first-login.sh
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/$KIOSK_USER/.Xauthority
 
 [Install]
 WantedBy=default.target
