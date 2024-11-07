@@ -119,7 +119,7 @@ EOF
 stage11_check_fde() {
     log_info "Stage 11: Checking Full Disk Encryption"
     if ! lsblk -o name,type,fstype,mountpoint | grep -q "crypto_LUKS"; then
-        zenity --info --title="Security Notice" --text="Full Disk Encryption (FDE) is not enabled. Enabling FDE is highly recommended to protect data in case of device loss or theft. Consider enabling FDE to enhance data security." | tee -a "$LOG_FILE"
+        zenity --info --title="Security Notice" --text="Full Disk Encryption (FDE) is not enabled. Enabling FDE is highly recommended to protect data in case of device loss or theft. Consider enabling FDE to enhance data security. Please restart the system afterward for autologin to initiate." | tee -a "$LOG_FILE"
     fi
 }
 
@@ -131,9 +131,9 @@ stage12_disable_ssh() {
     fi
 }
 
-# Stage 13: Setup first-login service with systemd to avoid terminal dependency
-stage13_setup_first_login_service() {
-    log_info "Stage 13: Setting up first login service with systemd"
+# Stage 13: Setup first-login and firefox update services with systemd
+stage13_setup_services() {
+    log_info "Stage 13: Setting up first-login and Firefox update services with systemd"
 
     # Create first-login script
     cat << 'EOF' > "/home/$KIOSK_USER/first-login.sh"
@@ -142,17 +142,17 @@ stage13_setup_first_login_service() {
 # Welcome prompt with "Cancel" and "OK" options
 zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." --ok-label="OK" --cancel-label="Cancel" || exit 0
 
-# Update options prompt
+# Update options prompt with larger window size
 UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
     --text="Would you like to update Firefox, the OS, or skip updates?\n\n*Default to skip after 5 minutes.*" \
-    --radiolist --column="Select" --column="Option" FALSE "Firefox" FALSE "OS" TRUE "Skip" --timeout=300)
+    --radiolist --column="Select" --column="Option" FALSE "Firefox" FALSE "OS" TRUE "Skip" --timeout=300 --width=400 --height=250)
 
 # Execute based on choice
 case "$UPDATE_OPTION" in
     "Firefox")
-        zenity --info --title="Updating Firefox" --text="Updating Firefox. Please wait..."
-        sudo apt install -y firefox
-        zenity --info --title="Update Complete" --text="Firefox update complete."
+        # Start Firefox update service and display progress
+        systemctl --user start firefox-update.service
+        zenity --progress --title="Updating Firefox" --text="Updating Firefox... Please wait." --percentage=0 --pulsate --no-cancel --width=400
         ;;
     "OS")
         zenity --info --title="Updating OS" --text="Updating system. Please wait..."
@@ -167,9 +167,10 @@ esac
 URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:")
 echo "$URL" > "$HOME/.kiosk_url"
 firefox --kiosk "$URL" &
+sleep 3  # Wait for 3 seconds after URL entry
 
-# Final lock confirmation
-zenity --question --title="Lock System" --text="Ready to lock the system? USB devices and peripherals will be disabled." || exit 0
+# Lock system prompt (OK only)
+zenity --info --title="Lock System" --text="Click OK to lock the system and disable peripherals." --ok-label="OK"
 
 # Disable all input devices using xinput
 for id in $(xinput --list --id-only); do
@@ -201,8 +202,23 @@ Environment=XAUTHORITY=/home/$KIOSK_USER/.Xauthority
 WantedBy=default.target
 EOF
 
-    # Enable systemd service for the kiosk user
+    # Create systemd service for Firefox update
+    cat << EOF > "/etc/systemd/system/firefox-update.service"
+[Unit]
+Description=Firefox Update Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/apt-get install -y firefox
+Type=oneshot
+
+[Install]
+WantedBy=default.target
+EOF
+
+    # Enable services for the kiosk user
     systemctl enable kiosk-first-login.service
+    systemctl enable firefox-update.service
 }
 
 # Execute all stages
@@ -218,6 +234,6 @@ stage9_install_firefox
 stage10_install_caffeine
 stage11_check_fde
 stage12_disable_ssh
-stage13_setup_first_login_service
+stage13_setup_services
 
-zenity --info --title="Kiosk Setup Complete" --text="Initial setup complete. Log in as the kiosk user to continue with configuration." | tee -a "$LOG_FILE"
+zenity --info --title="Kiosk Setup Complete" --text="Initial setup complete. Please restart the system and log in as the kiosk user ($KIOSK_USER) to continue." | tee -a "$LOG_FILE"
