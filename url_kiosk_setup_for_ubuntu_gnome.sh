@@ -94,8 +94,6 @@ stage8_set_gnome_preferences() {
 # Stage 9: Create the GNOME Kiosk Session
 stage9_create_kiosk_session() {
     log_info "Stage 9: Creating custom GNOME kiosk session"
-
-    # Create kiosk session file
     cat << EOF > /usr/share/xsessions/kiosk.desktop
 [Desktop Entry]
 Name=Kiosk
@@ -105,14 +103,12 @@ Type=Application
 DesktopNames=Kiosk;GNOME
 EOF
 
-    # Define the custom session
     cat << EOF > /usr/share/gnome-session/sessions/kiosk.session
 [GNOME Session]
 Name=Kiosk
 RequiredComponents=run-my-app;
 EOF
 
-    # Set the kiosk session as the default session for the user
     mkdir -p /var/lib/AccountsService/users/
     cat << EOF > /var/lib/AccountsService/users/$KIOSK_USER
 [User]
@@ -136,18 +132,13 @@ EOF
 # Stage 11: Create the First-Login Script with Zenity Messages and Logic
 stage11_create_first_login_script() {
     log_info "Stage 11: Setting up the first-login script for kiosk"
-
-    # Create first-login script
     cat << 'EOF' > "/home/$KIOSK_USER/first-login.sh"
 #!/bin/bash
 
-# Allow access to the display for xinput commands
 xhost +local:
 
-# Welcome prompt
 zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." --ok-label="OK" --cancel-label="Cancel" || exit 0
 
-# Update options prompt
 UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
     --text="Would you like to update Firefox, the OS, or skip updates?\n\n*Default to skip after 5 minutes.*" \
     --radiolist --column="Select" --column="Option" FALSE "Firefox" FALSE "OS" TRUE "Skip" --timeout=300 --width=600 --height=400)
@@ -169,26 +160,40 @@ case "$UPDATE_OPTION" in
         ;;
 esac
 
-# URL prompt for kiosk mode
 URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:")
 echo "$URL" > "$HOME/.kiosk_url"
 firefox --kiosk "$URL" &
 sleep 3
 
-# Lock system prompt
 zenity --info --title="Lock System" --text="Click OK to lock the system and disable peripherals." --ok-label="OK"
 
-# Disable input devices
 for id in $(xinput --list --id-only); do
     xinput disable "$id"
 done
-
-# Disable USB storage
-sudo modprobe -r usb_storage
 EOF
 
     chmod +x "/home/$KIOSK_USER/first-login.sh"
     chown "$KIOSK_USER":"$KIOSK_USER" "/home/$KIOSK_USER/first-login.sh"
+}
+
+# Stage 12: Set Up Systemd Service to Disable USB Storage
+stage12_disable_usb_storage_service() {
+    log_info "Stage 12: Setting up systemd service to disable USB storage"
+    cat << EOF > /etc/systemd/system/disable-usb-storage.service
+[Unit]
+Description=Disable USB Storage for Kiosk Mode
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/modprobe -r usb_storage
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl enable disable-usb-storage.service
 }
 
 # Execute all stages
@@ -203,5 +208,6 @@ stage8_set_gnome_preferences
 stage9_create_kiosk_session
 stage10_create_application_entry
 stage11_create_first_login_script
+stage12_disable_usb_storage_service
 
 zenity --info --title="Kiosk Setup Complete" --text="Initial setup complete. Please restart the system and log in as the kiosk user ($KIOSK_USER) to continue." | tee -a "$LOG_FILE"
