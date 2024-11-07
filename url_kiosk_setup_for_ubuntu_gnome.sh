@@ -131,16 +131,16 @@ stage12_disable_ssh() {
     fi
 }
 
-# Stage 13: Setup first-login and firefox update services with systemd
+# Stage 13: Setup first-login and Firefox update in first-login script
 stage13_setup_services() {
-    log_info "Stage 13: Setting up first-login and Firefox update services with systemd"
+    log_info "Stage 13: Setting up first-login script"
 
     # Create first-login script
     cat << 'EOF' > "/home/$KIOSK_USER/first-login.sh"
 #!/bin/bash
 
 # Allow display access for the kiosk user
-su "$USER" -c "xhost local:$USER"
+xhost +local:
 
 zenity --question --title="Welcome to Kiosk Setup" --text="Welcome to Kiosk setup. Click OK to proceed or Cancel to exit." --ok-label="OK" --cancel-label="Cancel" || exit 0
 
@@ -150,18 +150,22 @@ UPDATE_OPTION=$(zenity --list --title="Kiosk Setup - Update Options" \
 
 case "$UPDATE_OPTION" in
     "Firefox")
-        systemctl --user start firefox-update.service
-        zenity --progress --title="Updating Firefox" --text="Updating Firefox... Please wait." --percentage=0 --pulsate --no-cancel --width=600
+        zenity --progress --title="Updating Firefox" --text="Updating Firefox... Please wait." --percentage=0 --pulsate --no-cancel --width=600 &
+        APT_PID=$!
+        sudo apt-get install -y firefox &> /dev/null &
+        wait $APT_PID
+        zenity --info --title="Update Complete" --text="Firefox update complete." --width=400
         ;;
     "OS")
-        zenity --info --title="Updating OS" --text="Updating system. Please wait..."
-        sudo apt update && sudo apt -y upgrade && sudo apt -y autoremove
-        zenity --info --title="Update Complete" --text="OS update complete. Restart recommended."
+        gnome-software --mode=updates &
+        zenity --info --title="System Update" --text="The system update app has opened.\n\nPlease complete the update and restart the device. Once restarted, log in again to continue with the kiosk setup." --width=400
+        exit 0
         ;;
     "Skip"|"")
         ;;
 esac
 
+# Prompt for URL to start in kiosk mode
 URL=$(zenity --entry --title="Kiosk Setup - URL" --text="Enter the URL for kiosk mode:")
 echo "$URL" > "$HOME/.kiosk_url"
 firefox --kiosk "$URL" &
@@ -196,22 +200,7 @@ Environment=XAUTHORITY=/home/$KIOSK_USER/.Xauthority
 WantedBy=default.target
 EOF
 
-    # Create systemd service for Firefox update
-    cat << EOF > "/etc/systemd/system/firefox-update.service"
-[Unit]
-Description=Firefox Update Service
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/apt-get install -y firefox
-Type=oneshot
-
-[Install]
-WantedBy=default.target
-EOF
-
     systemctl enable kiosk-first-login.service
-    systemctl enable firefox-update.service
 }
 
 # Execute all stages
