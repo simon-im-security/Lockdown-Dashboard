@@ -1,49 +1,129 @@
-# Ubuntu Desktop Kiosk Setup Script
+#!/bin/bash
 
-## Description
-This script configures Ubuntu Desktop to run in kiosk mode with the following features:
-- Firefox in kiosk mode for a specified URL.
-- Disables the GNOME welcome screen for new users.
-- Removes unnecessary applications for a minimal setup.
-- Adds a Zenity dialog accessible through the app grid.
+# Title: Ubuntu Desktop Kiosk Setup
+# Description: Configures GNOME on Ubuntu Desktop to run Firefox in kiosk mode, disables the GNOME welcome screen, and removes unnecessary apps.
+# Author: Simon .I
+# Version: 2025.01.01
 
-### Script Details
-- **Title**: Ubuntu Desktop Kiosk Setup
-- **Author**: Simon .I
-- **Version**: 2025.01.01
+# Check for root permissions
+if [ "$EUID" -ne 0 ]; then
+  echo "This script must be run as root."
+  echo "Please run the script with sudo or as the root user."
+  read -p "Press Enter to exit the script."
+  exit
+fi
 
----
+# Step 1: Prompt to begin setup
+clear
+echo "Welcome to the Ubuntu Kiosk Setup Script."
+read -p "Begin kiosk setup? (y/n): " setup_start
+if [[ ! "$setup_start" =~ ^[Yy]$ ]]; then
+  echo "Setup aborted. Exiting."
+  exit 0
+fi
 
-## Features
-1. **Kiosk User Creation**:
-   - Creates a dedicated kiosk user.
-   - Sets up the Firefox browser to run in kiosk mode at startup.
+# Step 2: Prompt to allow user to install required software
+clear
+echo "We recommend you install any required software (e.g., CrowdStrike Falcon) before continuing."
+read -p "Do you need to install additional software before proceeding? (y/n): " install_prompt
+if [[ "$install_prompt" =~ ^[Yy]$ ]]; then
+  echo "Setup cancelled. Please install your required software, then run the script again."
+  exit 0
+fi
 
-2. **Zenity Integration**:
-   - Adds a custom Zenity script for user interaction.
-   - The Zenity app is accessible via the GNOME app grid.
+# Step 3: Collect input for the kiosk user
+clear
+echo "Let's create the kiosk user."
+read -p "Enter the username for the kiosk user: " kiosk_user
+read -s -p "Enter the password for $kiosk_user: " kiosk_password
+echo
+read -p "Enter the URL for kiosk mode (e.g., https://example.com): " kiosk_url
 
-3. **GNOME Customisations**:
-   - Disables hot corners and overlay key.
-   - Removes the GNOME welcome screen.
+# Step 4: Create the kiosk user
+echo "Creating the kiosk user..."
+useradd -m -s /bin/bash "$kiosk_user"
+echo "$kiosk_user:$kiosk_password" | chpasswd
+echo "User $kiosk_user created successfully."
 
-4. **Unnecessary Software Removal**:
-   - Removes default applications like Thunderbird, LibreOffice, and more.
-   - Cleans up Snap packages for a minimal environment.
+# Disable GNOME Initial Setup for the new user
+echo "Disabling GNOME Initial Setup for the kiosk user..."
+mkdir -p /home/$kiosk_user/.config
+echo "yes" > /home/$kiosk_user/.config/gnome-initial-setup-done
+chown -R "$kiosk_user:$kiosk_user" /home/$kiosk_user/.config
 
-5. **Optional Login Hiding**:
-   - Prompts to hide the currently logged-in user from the login window.
+# Step 5: Configure Firefox autostart
+echo "Configuring Firefox autostart..."
+mkdir -p /home/$kiosk_user/.config/autostart
+cat <<EOF > /home/$kiosk_user/.config/autostart/firefox-kiosk.desktop
+[Desktop Entry]
+Type=Application
+Exec=firefox --kiosk "$kiosk_url"
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=Firefox Kiosk
+EOF
+chown -R "$kiosk_user:$kiosk_user" /home/$kiosk_user/.config
 
----
+# Step 6: Customise GNOME settings
+echo "Customising GNOME settings for $kiosk_user..."
+cat <<'EOF' >> /home/$kiosk_user/.bashrc
+gsettings set org.gnome.shell enable-hot-corners false
+gsettings set org.gnome.mutter overlay-key ''
+EOF
 
-## Installation Instructions
+# Step 7: Remove unnecessary software
+echo "Removing unnecessary software..."
+apt purge -y \
+    thunderbird \
+    rhythmbox \
+    libreoffice-common \
+    libreoffice-help-* \
+    transmission-common \
+    remmina \
+    remmina-plugin-* \
+    gimp \
+    shotwell \
+    gnome-calculator \
+    gnome-calendar \
+    gnome-disk-utility \
+    gnome-software \
+    gnome-text-editor \
+    gnome-user-guide \
+    gnome-contacts \
+    eog \
+    usb-creator-gtk \
+    usb-creator-common \
+    gnome-characters \
+    totem \
+    cheese \
+    yelp \
+    gnome-snapshot \
+    simple-scan \
+    evince
+apt autoremove -y
+apt clean
 
-### 1. Prerequisites
-- Ensure the script is executed as `root` or with `sudo` privileges.
-- Recommended for Ubuntu Desktop installations with GNOME.
+# Remove unnecessary Snap packages
+snap remove --purge thunderbird libreoffice gimp shotwell rhythmbox snap-store eog gnome-calculator gnome-calendar totem cheese yelp simple-scan evince || true
 
-### 2. Usage
-1. Save the script as `kiosk-setup.sh`.
-2. Make it executable:
-   ```bash
-   chmod +x kiosk-setup.sh
+# Step 8: Hide the currently logged-in user
+current_user=$(logname)
+read -p "Hide the currently logged-in user ($current_user) from the login window? (y/n): " hide_choice
+if [[ "$hide_choice" =~ ^[Yy]$ ]]; then
+  echo "Hiding user $current_user from the login window..."
+  echo "[User]" > /var/lib/AccountsService/users/$current_user
+  echo "SystemAccount=true" >> /var/lib/AccountsService/users/$current_user
+  chmod 600 /var/lib/AccountsService/users/$current_user
+  echo "User $current_user hidden from the login window."
+fi
+
+# Step 9: Confirm and restart the system
+clear
+read -p "Kiosk mode setup is complete. Do you want to restart the system now? (y/n): " restart_choice
+if [[ "$restart_choice" =~ ^[Yy]$ ]]; then
+  echo "Restarting the system..."
+  shutdown -r now
+else
+  echo "Setup complete. Please restart the system manually to apply all changes."
+fi
