@@ -16,7 +16,7 @@ This script automates the configuration of Ubuntu Desktop for kiosk use. It simp
 
 ## Prerequisites
 - Ubuntu Desktop with GNOME installed.
-- Root or `sudo` privileges.
+- Root or sudo privileges.
 
 ---
 
@@ -24,55 +24,63 @@ This script automates the configuration of Ubuntu Desktop for kiosk use. It simp
 
 ### Step 1: Save and Prepare the Script
 1. Save the script as `kiosk-setup.sh`.
-2. Make it executable:
-   chmod +x kiosk-setup.sh
+2. Make it executable with the command: `chmod +x kiosk-setup.sh`.
 
 ### Step 2: Run the Script
-Execute the script with:
-   sudo ./kiosk-setup.sh
+Run the script using: `sudo ./kiosk-setup.sh`.
 
 ---
 
 ## Key Workflow
 
 ### 1. User Creation
-The script will prompt you to create a dedicated user:
-   Enter the username for the kiosk user: 
-   Enter the password for [username]: 
-   Enter the URL for kiosk mode (e.g., https://example.com):
+The script will prompt you to create a dedicated user by entering the username, password, and kiosk URL.
 
 ### 2. Firefox Configuration
-Sets up Firefox to run in kiosk mode:
-   Configuring Firefox autostart...
-This creates a `.desktop` file for Firefox in kiosk mode:
-   [Desktop Entry]
-   Type=Application
-   Exec=firefox --kiosk "https://example.com"
+Configures Firefox to run in kiosk mode and automatically launch with the specified URL.
 
 ### 3. GNOME Customisation
-Disables unnecessary GNOME features:
-- Hot corners.
-- Overlay key (Super key menu).
-- GNOME welcome screen for new users.
+Customises GNOME settings to improve the user experience:
+- Disables hot corners.
+- Disables the overlay key (Super key menu).
+- Disables the GNOME welcome screen for new users.
 
 ### 4. Application Cleanup
-Removes unneeded software to reduce clutter:
-   Removing unnecessary software...
-Applications removed include:
+Removes unnecessary applications, including:
 - Thunderbird
-- LibreOffice
-- Cheese (Camera app)
-- Simple Scan
-- GNOME Calendar
+- Rhythmbox
+- LibreOffice (all components)
 - Transmission
+- Remmina (and related plugins)
+- GIMP
+- Shotwell
+- GNOME Calculator
+- GNOME Calendar
+- GNOME Disk Utility
+- GNOME Software Center
+- GNOME Text Editor
+- GNOME Characters
+- Eye of GNOME (Image Viewer)
+- Cheese (Camera App)
+- Yelp (Help App)
+- GNOME Snapshot (Camera)
+- Simple Scan
+- Evince (Document Viewer)
+- USB Creator
+
+Snap packages for these applications are also removed.
 
 ### 5. User Login Management
-Optionally hides the currently logged-in user from the login screen:
-   Hide the currently logged-in user (e.g., admin) from the login window? (y/n):
+The script can hide the currently logged-in user from the login screen.
 
 ### 6. System Restart
-Prompts to restart the system after setup:
-   Kiosk mode setup is complete. Do you want to restart the system now? (y/n):
+Prompts you to restart the system to apply all changes.
+
+---
+
+## Notes
+- To debug any issues, use the log command: `journalctl -xe`.
+- To test kiosk setup for another user, create a new test user using: `sudo useradd -m -s /bin/bash testuser`.
 
 ---
 
