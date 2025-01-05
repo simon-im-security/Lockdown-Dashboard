@@ -1,58 +1,81 @@
 #!/bin/bash
 
-# Title: Ubuntu Desktop Kiosk Setup
-# Description: Configures GNOME on Ubuntu Desktop to run Firefox in kiosk mode, disables the GNOME welcome screen, and removes unnecessary apps.
+# Title: Lockdown Kiosk
+# Description: Configures Ubuntu for kiosk mode, removes unnecessary apps, and disables inputs for lockdown purposes.
 # Author: Simon .I
-# Version: 2025.01.01
+# Version: 2025.01.04
 
-# Check for root permissions
+LOG_FILE="$HOME/lockdown_setup.log"
+
+# Function to log messages
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
+# Ensure the script is run as root
 if [ "$EUID" -ne 0 ]; then
-  echo "This script must be run as root."
-  echo "Please run the script with sudo or as the root user."
-  read -p "Press Enter to exit the script."
-  exit
+    log_message "Error: Script must be run as root."
+    echo "Please run this script as root or with sudo."
+    exit 1
 fi
 
-# Step 1: Prompt to begin setup
+# Welcome message
 clear
-echo "Welcome to the Ubuntu Kiosk Setup Script."
+log_message "Starting the Lockdown Kiosk Setup."
+echo "Welcome to the Lockdown Kiosk Setup Script."
 read -p "Begin kiosk setup? (y/n): " setup_start
-if [[ ! "$setup_start" =~ ^[Yy]$ ]]; then
-  echo "Setup aborted. Exiting."
-  exit 0
-fi
-
-# Step 2: Prompt to allow user to install required software
 clear
-echo "We recommend you install any required software (e.g., CrowdStrike Falcon) before continuing."
-read -p "Do you need to install additional software before proceeding? (y/n): " install_prompt
-if [[ "$install_prompt" =~ ^[Yy]$ ]]; then
-  echo "Setup cancelled. Please install your required software, then run the script again."
-  exit 0
+if [[ ! "$setup_start" =~ ^[Yy]$ ]]; then
+    log_message "Setup aborted by user."
+    echo "Setup aborted. Exiting."
+    exit 0
 fi
 
-# Step 3: Collect input for the kiosk user
+# Ensure YAD is installed
+clear
+if ! command -v yad &>/dev/null; then
+    echo "YAD is required to proceed with this script."
+    read -p "Do you want to install YAD now? (y/n): " install_yad
+    clear
+    if [[ "$install_yad" =~ ^[Yy]$ ]]; then
+        log_message "Installing YAD..."
+        apt update && apt install -y yad
+        if ! command -v yad &>/dev/null; then
+            log_message "Failed to install YAD."
+            echo "Failed to install YAD. Please install it manually and rerun the script."
+            exit 1
+        fi
+        log_message "YAD installed successfully."
+    else
+        log_message "User declined to install YAD."
+        echo "YAD installation is required. Exiting."
+        exit 0
+    fi
+fi
+
+# Create kiosk user
 clear
 echo "Let's create the kiosk user."
 read -p "Enter the username for the kiosk user: " kiosk_user
+clear
 read -s -p "Enter the password for $kiosk_user: " kiosk_password
-echo
+clear
 read -p "Enter the URL for kiosk mode (e.g., https://example.com): " kiosk_url
+clear
 
-# Step 4: Create the kiosk user
-echo "Creating the kiosk user..."
+log_message "Creating kiosk user: $kiosk_user."
 useradd -m -s /bin/bash "$kiosk_user"
 echo "$kiosk_user:$kiosk_password" | chpasswd
-echo "User $kiosk_user created successfully."
+log_message "Kiosk user $kiosk_user created."
 
 # Disable GNOME Initial Setup for the new user
-echo "Disabling GNOME Initial Setup for the kiosk user..."
+log_message "Disabling GNOME Initial Setup for kiosk user."
 mkdir -p /home/$kiosk_user/.config
 echo "yes" > /home/$kiosk_user/.config/gnome-initial-setup-done
 chown -R "$kiosk_user:$kiosk_user" /home/$kiosk_user/.config
 
-# Step 5: Configure Firefox autostart
-echo "Configuring Firefox autostart..."
+# Configure Firefox autostart
+log_message "Configuring Firefox autostart for kiosk user."
 mkdir -p /home/$kiosk_user/.config/autostart
 cat <<EOF > /home/$kiosk_user/.config/autostart/firefox-kiosk.desktop
 [Desktop Entry]
@@ -65,65 +88,216 @@ Name=Firefox Kiosk
 EOF
 chown -R "$kiosk_user:$kiosk_user" /home/$kiosk_user/.config
 
-# Step 6: Customise GNOME settings
-echo "Customising GNOME settings for $kiosk_user..."
+# Customise GNOME settings
+log_message "Customising GNOME settings for $kiosk_user."
 cat <<'EOF' >> /home/$kiosk_user/.bashrc
-gsettings set org.gnome.shell enable-hot-corners false
-gsettings set org.gnome.mutter overlay-key ''
+if gsettings list-schemas | grep -q "org.gnome.shell"; then
+    if gsettings list-keys org.gnome.shell | grep -q "enable-hot-corners"; then
+        gsettings set org.gnome.shell enable-hot-corners false
+    fi
+fi
+gsettings set org.gnome.mutter overlay-key '' || echo "Overlay key not set"
 EOF
 
-# Step 7: Remove unnecessary software
-echo "Removing unnecessary software..."
-apt purge -y \
-    thunderbird \
-    rhythmbox \
-    libreoffice-common \
-    libreoffice-help-* \
-    transmission-common \
-    remmina \
-    remmina-plugin-* \
-    gimp \
-    shotwell \
-    gnome-calculator \
-    gnome-calendar \
-    gnome-disk-utility \
-    gnome-software \
-    gnome-text-editor \
-    gnome-user-guide \
-    gnome-contacts \
-    eog \
-    usb-creator-gtk \
-    usb-creator-common \
-    gnome-characters \
-    totem \
-    cheese \
-    yelp \
-    gnome-snapshot \
-    simple-scan \
-    evince
-apt autoremove -y
-apt clean
+# Configure system to never sleep or dim
+log_message "Configuring system power settings to never sleep or dim."
+cat <<EOF > /etc/systemd/logind.conf
+[Login]
+IdleAction=ignore
+IdleActionSec=0
+HandleLidSwitch=ignore
+HandleLidSwitchDocked=ignore
+EOF
+# Do not restart systemd-logind here to avoid interruption
+log_message "Logind configuration updated, please restart systemd-logind manually later."
 
-# Remove unnecessary Snap packages
-snap remove --purge thunderbird libreoffice gimp shotwell rhythmbox snap-store eog gnome-calculator gnome-calendar totem cheese yelp simple-scan evince || true
+clear
+# Ask the user if they want to uninstall unnecessary software
+read -p "Do you want to remove unnecessary software and packages? This is recommended for streamlining the kiosk environment. (y/n): " remove_choice
+if [[ "$remove_choice" =~ ^[Yy]$ ]]; then
+    log_message "Removing unnecessary software."
+    # Purging unnecessary software packages to streamline the kiosk environment.
+    apt purge -y \
+        thunderbird rhythmbox libreoffice-common libreoffice-help-* transmission-common \
+        remmina remmina-plugin-* gimp shotwell gnome-calculator gnome-calendar gnome-disk-utility \
+        gnome-software gnome-text-editor gnome-user-guide gnome-contacts eog usb-creator-gtk \
+        usb-creator-common gnome-characters totem cheese yelp gnome-snapshot simple-scan evince \
+        gnome-clocks gnome-startup-applications language-selector-gnome nautilus baobab deja-dup seahorse gnome-font-viewer \
+        fwupd gnome-firmware
+    apt autoremove -y
+    apt clean
 
-# Step 8: Hide the currently logged-in user
-current_user=$(logname)
-read -p "Hide the currently logged-in user ($current_user) from the login window? (y/n): " hide_choice
-if [[ "$hide_choice" =~ ^[Yy]$ ]]; then
-  echo "Hiding user $current_user from the login window..."
-  echo "[User]" > /var/lib/AccountsService/users/$current_user
-  echo "SystemAccount=true" >> /var/lib/AccountsService/users/$current_user
-  chmod 600 /var/lib/AccountsService/users/$current_user
-  echo "User $current_user hidden from the login window."
+    log_message "Removing unnecessary Snap packages."
+    # Removing redundant Snap packages for consistency in the kiosk setup.
+    snap remove --purge thunderbird libreoffice gimp shotwell rhythmbox snap-store \
+        eog gnome-calculator gnome-calendar totem cheese yelp simple-scan evince gnome-clocks || true
+
+    log_message "Ensuring GNOME Settings App is properly installed."
+    # Reinstall the GNOME Settings App to restore system configuration capabilities.
+    # This step addresses any removal of gnome-control-center during the purging of unnecessary packages.
+    apt install -y gnome-control-center
+    log_message "GNOME Settings App has been successfully installed and is ready for use."
+
+    log_message "Final cleanup: Removing redundant GNOME Help App (if reinstalled)."
+    # In some cases, the GNOME Help App (yelp) is reinstalled as a dependency of gnome-control-center.
+    # This step ensures it is removed to maintain a streamlined kiosk environment.
+    apt purge -y yelp
+    apt autoremove -y
+    apt clean
+    log_message "GNOME Help App (yelp) successfully removed as part of the final cleanup."
+else
+    log_message "User opted to skip software removal."
 fi
 
-# Step 9: Confirm and restart the system
 clear
-read -p "Kiosk mode setup is complete. Do you want to restart the system now? (y/n): " restart_choice
-if [[ "$restart_choice" =~ ^[Yy]$ ]]; then
-  echo "Restarting the system..."
-  shutdown -r now
+# Ask the user if they want to set up the firewall
+read -p "Do you want to configure the firewall to allow only necessary ports (DNS, HTTPS, HTTP, and NTP)? (y/n): " firewall_choice
+if [[ "$firewall_choice" =~ ^[Yy]$ ]]; then
+    log_message "Configuring firewall to restrict unnecessary traffic."
+    # Configure UFW to allow only required ports (DNS, HTTPS, HTTP, NTP) and block the rest.
+    ufw --force reset
+    ufw default deny incoming
+    ufw default allow outgoing
+
+    # Allow DNS
+    ufw allow out 53 comment 'Allow DNS'
+
+    # Allow HTTPS
+    ufw allow out 443 comment 'Allow HTTPS'
+
+    # Allow HTTP (optional, for redirects)
+    ufw allow out 80 comment 'Allow HTTP'
+
+    # Allow NTP for time synchronization
+    ufw allow out 123 comment 'Allow NTP'
+
+    # Enable the firewall
+    ufw --force enable
+    log_message "Firewall configured: Only DNS, HTTPS, HTTP, and NTP allowed."
 else
-  echo "Setup complete. Please restart the system manually to apply all changes."
+    log_message "User opted to skip firewall configuration."
+fi
+
+log_message "Configuring GNOME power and screen lock settings for kiosk user."
+# Disable screen blanking, sleeping, and locking
+su - $kiosk_user -c 'dbus-launch gsettings set org.gnome.desktop.session idle-delay 0'
+su - $kiosk_user -c 'dbus-launch gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout 0'
+su - $kiosk_user -c 'dbus-launch gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout 0'
+su - $kiosk_user -c 'dbus-launch gsettings set org.gnome.desktop.screensaver lock-enabled false'
+su - $kiosk_user -c 'dbus-launch gsettings set org.gnome.desktop.screensaver idle-activation-enabled false'
+log_message "GNOME power and screen lock settings updated."
+
+# Hide the currently logged-in user
+clear
+current_user=$(logname)
+read -p "Hide the currently logged-in user ($current_user) from the login window? (y/n): " hide_choice
+clear
+if [[ "$hide_choice" =~ ^[Yy]$ ]]; then
+    log_message "Hiding user $current_user from the login window."
+    echo "[User]" > /var/lib/AccountsService/users/$current_user
+    echo "SystemAccount=true" >> /var/lib/AccountsService/users/$current_user
+    chmod 600 /var/lib/AccountsService/users/$current_user
+    log_message "User $current_user hidden from the login window."
+fi
+
+# Add Lockdown Dashboard script
+log_message "Adding Lockdown Dashboard script."
+
+LOCKDOWN_DASHBOARD="/usr/local/bin/lockdown_dashboard.sh"
+cat <<'EOF' > "$LOCKDOWN_DASHBOARD"
+#!/bin/bash
+LOG_FILE="$HOME/lockdown_dashboard.log"
+
+# Function to log messages
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
+log_message "Starting Lockdown Dashboard."
+GTK_THEME=Adwaita:dark yad --title="Lockdown Kiosk" \
+    --width=600 \
+    --height=400 \
+    --button="Lock:0" \
+    --text="<span foreground='#FFFFFF' weight='bold' font='36'>Lockdown Kiosk</span>\n\n
+<span font='18'>Once you've set up your dashboard webpage, return here and click the <b>LOCK</b> button on the bottom right corner to lock down this device.</span>" \
+    --text-align=center || exit 1
+
+if [[ $? -eq 0 ]]; then
+    log_message "Lock button clicked. Executing input disable script..."
+    sudo /usr/local/bin/disable_inputs.sh
+    log_message "Inputs disabled."
+else
+    log_message "YAD window closed without action. No inputs disabled."
+fi
+EOF
+chmod +x "$LOCKDOWN_DASHBOARD"
+
+# Add autostart for Lockdown Dashboard
+log_message "Configuring Lockdown Dashboard to start at login."
+cat <<EOF > /home/$kiosk_user/.config/autostart/lockdown_dashboard.desktop
+[Desktop Entry]
+Type=Application
+Exec=/usr/local/bin/lockdown_dashboard.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=Lockdown Dashboard
+Comment=Start Lockdown Dashboard at login
+EOF
+chown -R "$kiosk_user:$kiosk_user" /home/$kiosk_user/.config
+
+# Add Lockdown script to disable inputs
+log_message "Adding Lockdown script to disable inputs."
+
+LOCKDOWN_SCRIPT="/usr/local/bin/disable_inputs.sh"
+cat <<'EOF' > "$LOCKDOWN_SCRIPT"
+#!/bin/bash
+LOG_FILE="$HOME/disable_inputs.log"
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Attempting to disable inputs..." >> "$LOG_FILE"
+
+# Find and disable all input devices with "inhibited"
+for input in $(find /sys/devices/platform/i8042/serio* -name "inhibited" 2>>"$LOG_FILE"); do
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - Attempting to disable input: $input" >> "$LOG_FILE"
+    sudo bash -c "echo 1 > $input" 2>>"$LOG_FILE"
+    if [ $? -eq 0 ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Disabled input: $input" >> "$LOG_FILE"
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Failed to disable input: $input" >> "$LOG_FILE"
+    fi
+done
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Inputs disable attempt complete." >> "$LOG_FILE"
+EOF
+chmod +x "$LOCKDOWN_SCRIPT"
+
+# Configure sudoers for input disabling
+log_message "Configuring sudoers for input disabling."
+SUDOERS_ENTRY="/etc/sudoers.d/disable_inputs"
+echo "# Allow disabling inputs without password" > "$SUDOERS_ENTRY"
+echo "$kiosk_user ALL=(ALL) NOPASSWD: /usr/local/bin/disable_inputs.sh" >> "$SUDOERS_ENTRY"
+chmod 440 "$SUDOERS_ENTRY"
+log_message "Sudoers configuration complete."
+
+# Add Lockdown app to the menu
+cat <<EOF > /usr/share/applications/lockdown.desktop
+[Desktop Entry]
+Type=Application
+Exec=/usr/local/bin/lockdown_dashboard.sh
+Hidden=false
+NoDisplay=false
+Name=Lockdown Dashboard
+Comment=Start the Lockdown Dashboard manually
+EOF
+
+log_message "Lockdown app added to system menu."
+
+# Confirm and restart the system
+clear
+read -p "Setup is complete. Do you want to restart the system now? (y/n): " restart_choice
+clear
+if [[ "$restart_choice" =~ ^[Yy]$ ]]; then
+    log_message "Restarting the system."
+    shutdown -r now
+else
+    log_message "Setup complete. User opted to restart later."
+    echo "Setup complete. Please restart the system manually to apply changes."
 fi
