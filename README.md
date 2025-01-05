@@ -1,7 +1,7 @@
 # 🚀 Lockdown Kiosk Setup
 
 ## Description
-This script configures Ubuntu for **Kiosk Mode**, removes unnecessary apps, and locks down the system by disabling inputs. 
+This script configures Ubuntu Desktop for **Kiosk Mode**, removes unnecessary apps, and locks down the system by disabling inputs. 
 
 ---
 
