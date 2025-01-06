@@ -123,14 +123,14 @@ if [[ "$remove_choice" =~ ^[Yy]$ ]]; then
         gnome-software gnome-text-editor gnome-user-guide gnome-contacts eog usb-creator-gtk \
         usb-creator-common gnome-characters totem cheese yelp gnome-snapshot simple-scan evince \
         gnome-clocks gnome-startup-applications language-selector-gnome nautilus baobab deja-dup seahorse gnome-font-viewer \
-        fwupd gnome-firmware
+        fwupd gnome-firmware file-roller
     apt autoremove -y
     apt clean
 
     log_message "Removing unnecessary Snap packages."
     # Removing redundant Snap packages for consistency in the kiosk setup.
     snap remove --purge thunderbird libreoffice gimp shotwell rhythmbox snap-store \
-        eog gnome-calculator gnome-calendar totem cheese yelp simple-scan evince gnome-clocks || true
+        eog gnome-calculator gnome-calendar totem cheese yelp simple-scan evince gnome-clocks firmware-updater || true
 
     log_message "Ensuring GNOME Settings App is properly installed."
     # Reinstall the GNOME Settings App to restore system configuration capabilities.
@@ -145,6 +145,29 @@ if [[ "$remove_choice" =~ ^[Yy]$ ]]; then
     apt autoremove -y
     apt clean
     log_message "GNOME Help App (yelp) successfully removed as part of the final cleanup."
+
+    # General unnecessary application shortcuts
+    rm -f /usr/share/applications/org.gnome.PowerStats.desktop
+    rm -f /usr/share/applications/org.gnome.SystemMonitor.desktop
+    rm -f /usr/share/applications/update-manager.desktop
+    rm -f /usr/share/applications/org.gnome.FileRoller.desktop
+    rm -f /usr/share/applications/gcr-prompter.desktop
+    rm -f /usr/share/applications/gcr-viewer.desktop
+    rm -f /usr/share/applications/geoclue-demo-agent.desktop
+    rm -f /usr/share/applications/gkbd-keyboard-display.desktop
+    rm -f /usr/share/applications/gnome-initial-setup.desktop
+    rm -f /usr/share/applications/io.snapcraft.SessionAgent.desktop
+    rm -f /usr/share/applications/org.freedesktop.IBus.*.desktop
+    rm -f /usr/share/applications/org.gnome.Logs.desktop
+    rm -f /usr/share/applications/org.gnome.RemoteDesktop.Handover.desktop
+    rm -f /usr/share/applications/org.gnome.Tecla.desktop
+    rm -f /usr/share/applications/org.gnome.Zenity.desktop
+    rm -f /usr/share/applications/python3.12.desktop
+    rm -f /usr/share/applications/snap-handle-link.desktop
+    rm -f /usr/share/applications/software-properties-drivers.desktop
+    rm -f /usr/share/applications/gnome-language-selector.desktop
+    rm -f /usr/share/applications/software-properties-gtk.desktop
+    rm -f /usr/share/applications/nm-connection-editor.desktop
 else
     log_message "User opted to skip software removal."
 fi
@@ -219,7 +242,7 @@ GTK_THEME=Adwaita:dark yad --title="Lockdown Kiosk" \
     --height=400 \
     --button="Lock:0" \
     --text="<span foreground='#FFFFFF' weight='bold' font='36'>Lockdown Kiosk</span>\n\n
-<span font='18'>Once you've set up your dashboard webpage, return here and click the <b>LOCK</b> button on the bottom right corner to lock down this device.</span>" \
+<span font='18'>After setting up your dashboard webpage, use <b>Alt + Tab</b> to return to this window and click the <b>LOCK</b> button at the bottom right corner to secure this device.</span>" \
     --text-align=center || exit 1
 
 if [[ $? -eq 0 ]]; then
