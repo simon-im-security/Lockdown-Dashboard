@@ -252,20 +252,31 @@ log_message "Adding Lockdown script to disable inputs."
 LOCKDOWN_SCRIPT="/usr/local/bin/disable_inputs.sh"
 cat <<'EOF' > "$LOCKDOWN_SCRIPT"
 #!/bin/bash
-LOG_FILE="$HOME/disable_inputs.log"
-echo "$(date '+%Y-%m-%d %H:%M:%S') - Attempting to disable inputs..." >> "$LOG_FILE"
+LOG_FILE="/var/log/usb_disable.log"
 
-# Find and disable all input devices with "inhibited"
-for input in $(find /sys/devices/platform/i8042/serio* -name "inhibited" 2>>"$LOG_FILE"); do
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Attempting to disable input: $input" >> "$LOG_FILE"
-    sudo bash -c "echo 1 > $input" 2>>"$LOG_FILE"
-    if [ $? -eq 0 ]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Disabled input: $input" >> "$LOG_FILE"
-    else
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Failed to disable input: $input" >> "$LOG_FILE"
-    fi
+# Function to log messages
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
+log_message "Starting USB and PCI input device disabler loop..."
+
+# Infinite loop to monitor and disable USB and PCI input devices
+while true; do
+    for device in $(find /sys/devices/* -name "inhibited" | grep -E "usb|pci|i8042"); do
+        if [ -w "$device" ]; then
+            echo 1 > "$device" 2>/dev/null
+            if [ $? -eq 0 ]; then
+                log_message "Disabled input device: $device"
+            else
+                log_message "Failed to disable input device: $device"
+            fi
+        else
+            log_message "Device not writable or already disabled: $device"
+        fi
+    done
+    sleep 1  # Avoid excessive CPU usage
 done
-echo "$(date '+%Y-%m-%d %H:%M:%S') - Inputs disable attempt complete." >> "$LOG_FILE"
 EOF
 chmod +x "$LOCKDOWN_SCRIPT"
 
