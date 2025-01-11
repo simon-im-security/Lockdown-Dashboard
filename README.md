@@ -67,7 +67,7 @@
     <h2>📝 Setup Process</h2>
     <h3>1. Run the Script as Root</h3>
     <p>Open a terminal and run:</p>
-    <pre><code>sudo curl -o ubuntu_desktop_kiosk_setup.sh https://raw.githubusercontent.com/simon-im-security/Ubuntu-Desktop-Kiosk-Setup/refs/heads/main/ubuntu_desktop_kiosk_setup && sudo bash ubuntu_desktop_kiosk_setup.sh</code></pre>
+    <pre><code>sudo wget -O ubuntu_desktop_kiosk_setup.sh https://raw.githubusercontent.com/simon-im-security/Ubuntu-Desktop-Kiosk-Setup/refs/heads/main/ubuntu_desktop_kiosk_setup && sudo bash ubuntu_desktop_kiosk_setup.sh</code></pre>
     <p>This will download the script and execute it with the necessary privileges.</p>
     <h3>2. Follow Prompts</h3>
     <ul>
