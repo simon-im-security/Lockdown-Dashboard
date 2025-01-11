@@ -130,13 +130,12 @@ create_dashboard_user() {
     chown -R "$dashboard_user:$dashboard_user" /home/$dashboard_user/.config
 }
 
-# Function to create app shortcuts for the provided URLs and add them to autostart
 configure_firefox_shortcuts() {
     clear
     log_message "Creating Firefox shortcuts for provided URLs."
 
     # Prompt the user for URLs
-    read -p "Enter URLs separated by commas (e.g., www.google.com, www.microsoft.com): " input_urls
+    read -p "Enter URLs separated by commas (e.g., https://www.google.com, www.microsoft.com): " input_urls
 
     # Split URLs into an array
     IFS=',' read -ra url_array <<< "$input_urls"
@@ -159,7 +158,7 @@ configure_firefox_shortcuts() {
 [Desktop Entry]
 Type=Application
 Name=$app_name
-Exec=firefox --new-window "http://$url"
+Exec=firefox --new-window "$url"
 Icon=firefox
 Terminal=false
 Categories=Network;WebBrowser;
@@ -171,7 +170,7 @@ EOF
 [Desktop Entry]
 Type=Application
 Name=$app_name
-Exec=firefox --new-window "http://$url"
+Exec=firefox --new-window "$url"
 Icon=firefox
 Terminal=false
 X-GNOME-Autostart-enabled=true
@@ -283,18 +282,38 @@ configure_firewall() {
 
 # Function to configure GNOME power and screen lock settings
 configure_gnome_power_and_screen() {
-    log_message "Configuring GNOME power and screen lock settings for dashboard user."
+    log_message "Configuring GNOME power and screen lock settings."
 
-    su - $dashboard_user -c 'dbus-launch gsettings set org.gnome.desktop.session idle-delay 0'
-    su - $dashboard_user -c 'dbus-launch gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout 0'
-    su - $dashboard_user -c 'dbus-launch gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout 0'
+    # Apply settings for the dashboard user if specified
+    if [[ -n "$dashboard_user" ]]; then
+        log_message "Applying settings for dashboard user: $dashboard_user"
+        su - "$dashboard_user" -c 'gsettings set org.gnome.desktop.session idle-delay 0'
+        su - "$dashboard_user" -c 'gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout 0'
+        su - "$dashboard_user" -c 'gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout 0'
+        su - "$dashboard_user" -c 'gsettings set org.gnome.desktop.lockdown disable-lock-screen true'
+        su - "$dashboard_user" -c 'gsettings set org.gnome.desktop.screensaver lock-enabled false'
+        su - "$dashboard_user" -c 'gsettings set org.gnome.desktop.screensaver idle-activation-enabled false'
+        log_message "Settings applied successfully for dashboard user: $dashboard_user"
+    fi
 
-    # Add additional commands for disabling lock and screensaver
-    su - $dashboard_user -c 'dbus-launch gsettings set org.gnome.desktop.lockdown disable-lock-screen true'
-    su - $dashboard_user -c 'dbus-launch gsettings set org.gnome.desktop.screensaver lock-enabled false'
-    su - $dashboard_user -c 'dbus-launch gsettings set org.gnome.desktop.screensaver idle-activation-enabled false'
+    # Apply settings for all users in /home
+    log_message "Applying settings for all users in /home."
+    for user in $(ls /home); do
+        if id "$user" &>/dev/null; then
+            log_message "Applying settings for user: $user"
+            su - "$user" -c 'gsettings set org.gnome.desktop.session idle-delay 0'
+            su - "$user" -c 'gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout 0'
+            su - "$user" -c 'gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout 0'
+            su - "$user" -c 'gsettings set org.gnome.desktop.lockdown disable-lock-screen true'
+            su - "$user" -c 'gsettings set org.gnome.desktop.screensaver lock-enabled false'
+            su - "$user" -c 'gsettings set org.gnome.desktop.screensaver idle-activation-enabled false'
+            log_message "Settings applied successfully for user: $user"
+        else
+            log_message "User $user does not exist or is invalid. Skipping."
+        fi
+    done
 
-    log_message "GNOME power and screen lock settings updated."
+    log_message "GNOME power and screen lock settings configuration completed."
 }
 
 # Function to hide the currently logged-in user
@@ -364,13 +383,13 @@ GTK_THEME=Adwaita:dark yad --title="Lockdown Dashboard" \
     --width=1200 \
     --height=800 \
     --button="Lock:0" \
-    --text="<span foreground='#00008B' weight='bold' font='36'>Lockdown Dashboard</span>\n\n
-<span font='20'>When your dashboard webpage is ready, click the <b>LOCK</b> button at the bottom right corner to secure the device.</span>\n\n
-<b><span foreground='#228B22'>[ System Information ]</span></b>\n
-<span foreground='#228B22'>- Last restart at: <b>$last_restart</b></span>\n
-<span foreground='#228B22'>- Last update checked at: <b>$last_update_checked</b></span>\n
-<span foreground='#228B22'>- Ubuntu version: <b>$ubuntu_version</b></span>" \
-    --text-align=left || exit 1
+    --text="<span foreground='#008080' weight='bold' font='36'>LOCKDOWN DASHBOARD</span>\n\n
+<span foreground='#228B22' font='20'>When your dashboard webpage is ready, click the <b>LOCK</b> button at the bottom right corner to secure the device.</span>\n\n
+<b><span foreground='#FF4500'>[ SYSTEM INFORMATION ]</span></b>\n
+<span foreground='#1E90FF'>- Last restart at: <b>$last_restart</b></span>\n
+<span foreground='#1E90FF'>- Last update checked at: <b>$last_update_checked</b></span>\n
+<span foreground='#1E90FF'>- Ubuntu version: <b>$ubuntu_version</b></span>" \
+    --text-align=center || exit 1
 
 # Proceed with locking logic
 if [[ $? -eq 0 ]]; then
@@ -526,32 +545,50 @@ EOF
     log_message "Lockdown app added to the menu at $menu_entry."
 }
 
-# Function to configure Caffeine to autostart
+# Function to configure Caffeine to autostart with additional commands
 configure_caffeine_autostart() {
-    log_message "Configuring Caffeine to autostart after login."
+    log_message "Configuring Caffeine to autostart with gsettings setup after login."
 
     local autostart_file="/home/$dashboard_user/.config/autostart/caffeine.desktop"
+    local script_file="/home/$dashboard_user/start_caffeine_with_gsettings.sh"
 
-    # Create the autostart directory if it doesn't exist
+    # Create the script that runs gsettings and starts caffeine
+    cat <<EOF > "$script_file"
+#!/bin/bash
+
+# Apply GNOME session settings to disable screen blanking
+gsettings set org.gnome.desktop.session idle-delay 0
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout 0
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout 0
+gsettings set org.gnome.desktop.screensaver lock-enabled false
+gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
+
+# Start Caffeine
+caffeine
+EOF
+
+    # Make the script executable
+    chmod +x "$script_file"
+    chown "$dashboard_user:$dashboard_user" "$script_file"
+
+    # Create the autostart .desktop entry
     mkdir -p /home/$dashboard_user/.config/autostart
-
-    # Create the Caffeine autostart .desktop file
     cat <<EOF > "$autostart_file"
 [Desktop Entry]
 Type=Application
-Exec=caffeine
+Exec=$script_file
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
-Name=Caffeine
-Comment=Prevent system from sleeping
+Name=Start Caffeine with GSettings
+Comment=Apply GNOME settings and start Caffeine
 EOF
 
     # Set proper ownership
     chown -R "$dashboard_user:$dashboard_user" /home/$dashboard_user/.config
 
-    log_message "Caffeine autostart configured at $autostart_file."
-    echo "Caffeine has been configured to autostart after login."
+    log_message "Caffeine autostart configured with GNOME settings setup at $autostart_file."
+    echo "Caffeine has been configured to autostart with additional gsettings commands after login."
 }
 
 configure_reset_autostart() {
