@@ -707,5 +707,6 @@ configure_lockdown_autostart
 add_lockdown_disable_inputs_script
 configure_sudoers_for_inputs
 add_lockdown_app_to_menu
+configure_caffeine_autostart
 configure_reset_autostart
 confirm_and_restart
