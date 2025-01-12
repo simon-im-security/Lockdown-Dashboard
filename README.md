@@ -68,6 +68,8 @@
     </ul>
     <hr>
     <h2>📝 Setup Process</h2>
+    <h3>Before You Begin</h3>
+    <p>Install a fresh Ubuntu Desktop and log into the admin user account before running the script.</p>
     <h3>1. Run the Script as Root</h3>
     <p>Open a terminal and run:</p>
     <pre><code>sudo wget -O lockdown_dashboard_ubuntu_install.sh https://raw.githubusercontent.com/simon-im-security/Lockdown-Dashboard/refs/heads/main/lockdown_dashboard_ubuntu_install.sh && sudo bash lockdown_dashboard_ubuntu_install.sh</code></pre>
