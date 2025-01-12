@@ -475,7 +475,9 @@ configure_update_scheduler() {
     local update_script="/usr/local/bin/dashboard_update.sh"
 
     # Create the update script
-    cat <<'EOF' > "$update_script"
+    if [[ ! -f "$update_script" ]]; then
+        log_message "Creating the update script at $update_script."
+        cat <<'EOF' > "$update_script"
 #!/bin/bash
 
 # Log the update operation
@@ -483,7 +485,7 @@ log_file="/var/log/dashboard_update.log"
 echo "[$(date)] Starting dashboard update process..." >> "$log_file"
 
 # Perform the update and upgrade
-apt -y update ; apt -y upgrade ; snap refresh >> "$log_file" 2>&1
+apt -y update && apt -y upgrade && snap refresh >> "$log_file" 2>&1
 
 # Wait for 30 seconds to allow processes to settle
 sleep 30
@@ -493,29 +495,36 @@ echo "[$(date)] Update complete. Restarting system..." >> "$log_file"
 shutdown -r now
 EOF
 
-    # Set executable permissions for the script
-    chmod +x "$update_script"
-
-    log_message "Update script created at $update_script."
+        # Set executable permissions for the script
+        chmod +x "$update_script"
+        log_message "Update script created and marked as executable."
+    else
+        log_message "Update script already exists at $update_script. Skipping creation."
+    fi
 
     # Schedule the script using a cron job
     local cron_file="/etc/cron.d/dashboard_update"
 
-    # Generate a random minute between 0 and 59
-    local random_minute=$((RANDOM % 60))
+    if [[ -f "$cron_file" ]] && grep -q "$update_script" "$cron_file"; then
+        log_message "Cron job already exists for the update scheduler in $cron_file. Skipping addition."
+    else
+        log_message "Adding cron job for the update scheduler."
+        
+        # Generate a random minute between 0 and 59
+        local random_minute=$((RANDOM % 60))
 
-    # Write the cron job to run at a random time between 1 AM and 2 AM
-    cat <<EOF > "$cron_file"
+        # Write the cron job to run at a random time between 1 AM and 2 AM
+        cat <<EOF > "$cron_file"
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 $random_minute 1 * * * root $update_script
 EOF
 
-    # Set permissions for the cron file
-    chmod 644 "$cron_file"
-
-    log_message "Update scheduler configured. The system will update and restart daily at 1:$random_minute AM."
-    echo "The update scheduler has been configured. Updates will occur at 1:$random_minute AM daily."
+        # Set permissions for the cron file
+        chmod 644 "$cron_file"
+        log_message "Cron job added to $cron_file. Updates will occur daily at 1:$random_minute AM."
+        echo "The update scheduler has been configured. Updates will occur at 1:$random_minute AM daily."
+    fi
 }
 
 # Function to configure sudoers for input disabling
