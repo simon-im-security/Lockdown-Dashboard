@@ -356,6 +356,7 @@ add_lockdown_dashboard_script() {
     cat <<'EOF' > "$lockdown_dashboard"
 #!/bin/bash
 LOG_FILE="$HOME/lockdown_dashboard.log"
+SESSION_FILE="/tmp/lockdown_dashboard_session"
 
 # Function to log messages
 log_message() {
@@ -369,14 +370,14 @@ ubuntu_version=$(lsb_release -d | awk -F'\t' '{print $2}')
 
 log_message "Starting Lockdown Dashboard."
 
-# Wait for Firefox processes to start
-log_message "Waiting for Firefox windows to launch..."
-while ! pgrep -x firefox >/dev/null; do
-    log_message "No Firefox process detected. Retrying..."
-    sleep 1
-done
-log_message "Firefox processes detected. Proceeding with dashboard popup after 10 seconds."
-sleep 10
+# Check if this is the first run in the session
+if [[ ! -f "$SESSION_FILE" ]]; then
+    log_message "First run of YAD dialog for this session. Adding 10-second delay."
+    touch "$SESSION_FILE"
+    sleep 10
+else
+    log_message "YAD dialog already run this session. Skipping delay."
+fi
 
 # Display the YAD dialog
 GTK_THEME=Adwaita:dark yad --title="🔒 Lockdown Dashboard" \
