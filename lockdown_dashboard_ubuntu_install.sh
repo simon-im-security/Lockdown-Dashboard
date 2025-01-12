@@ -71,7 +71,7 @@ ensure_yad_and_caffeine_installed() {
         clear
         if [[ "$install_yad" =~ ^[Yy]$ ]]; then
             log_message "Installing YAD..."
-            apt update && apt install -y yad
+            apt install -y yad
             if ! command -v yad &>/dev/null; then
                 log_message "Failed to install YAD."
                 echo "Failed to install YAD. Please install it manually and rerun the script."
@@ -93,7 +93,7 @@ ensure_yad_and_caffeine_installed() {
         clear
         if [[ "$install_caffeine" =~ ^[Yy]$ ]]; then
             log_message "Installing Caffeine..."
-            apt update && apt install -y caffeine
+            apt install -y caffeine
             if ! dpkg -l | grep -q caffeine; then
                 log_message "Failed to install Caffeine."
                 echo "Failed to install Caffeine. Please manually configure your power settings to prevent sleep."
@@ -209,7 +209,7 @@ remove_unnecessary_software() {
         log_message "Ensuring GNOME Settings App is properly installed."
         while true; do
             if ! fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
-                apt update && apt install -y gnome-control-center && break
+                apt install -y gnome-control-center && break
             fi
             echo "Waiting for APT lock to be released..."
             sleep 5
@@ -624,13 +624,44 @@ configure_reset_autostart() {
     echo "Adding reset_firefox_settings to autostart..."
     local reset_script="/usr/local/bin/reset_firefox_settings.sh"
 
-    # Create the reset script
+    # Create the reset script with expanded variables
     cat <<EOF > "$reset_script"
 #!/bin/bash
-$(declare -f reset_firefox_settings) # Embed the reset_firefox_settings function
-reset_firefox_settings
+
+log_message() {
+    logger -t "lockdown_dashboard" "\$1"
+}
+
+log_message "Resetting Firefox settings for the user: $dashboard_user..."
+
+# Path for Snap-based Firefox profiles
+firefox_profile_path="/home/$dashboard_user/snap/firefox/common/.mozilla/firefox"
+
+# Check if the Firefox profile path exists
+if [ ! -d "\$firefox_profile_path" ]; then
+    log_message "Snap-based Firefox profile directory not found for $dashboard_user. Skipping reset."
+    exit 0
+fi
+
+# Find the default Firefox profile directory
+profile_dir=\$(find "\$firefox_profile_path" -type d -name "*.default-release" 2>/dev/null)
+if [ -z "\$profile_dir" ]; then
+    log_message "No default Firefox profile found in \$firefox_profile_path. Skipping reset."
+    exit 0
+fi
+
+log_message "Found Firefox profile: \$profile_dir"
+
+# Clear unwanted contents while preserving certain directories
+log_message "Clearing Firefox profile contents except 'extensions'..."
+find "\$profile_dir" -mindepth 1 -maxdepth 1 ! -name "extensions" -exec rm -rf {} \;
+
+# Adjust permissions
+chown -R "$dashboard_user:$dashboard_user" "\$firefox_profile_path"
+log_message "Firefox settings reset completed for $dashboard_user."
 EOF
 
+    # Ensure the reset script is executable
     chmod +x "$reset_script"
 
     # Create an autostart entry
@@ -649,41 +680,6 @@ EOF
     chown -R "$dashboard_user:$dashboard_user" "/home/$dashboard_user/.config/autostart"
     echo "Reset Firefox settings added to autostart for $dashboard_user."
     log_message "Reset Firefox settings added to autostart for $dashboard_user."
-}
-
-# Function to reset Firefox settings
-reset_firefox_settings() {
-    echo "Resetting Firefox settings for the user: $dashboard_user..."
-    log_message "Resetting Firefox settings for the user: $dashboard_user..."
-
-    # Path for Snap-based Firefox profiles
-    firefox_profile_path="/home/$dashboard_user/snap/firefox/common/.mozilla/firefox"
-
-    # Check if the Firefox profile path exists
-    if [ ! -d "$firefox_profile_path" ]; then
-        echo "Snap-based Firefox profile directory does not exist. Skipping reset."
-        log_message "Snap-based Firefox profile directory not found for $dashboard_user. Skipping reset."
-        return
-    fi
-
-    # Find the default Firefox profile directory
-    profile_dir=$(find "$firefox_profile_path" -type d -name "*.default-release" 2>/dev/null)
-    if [ -z "$profile_dir" ]; then
-        echo "No default Firefox profile found. Skipping reset."
-        log_message "No default Firefox profile found for $dashboard_user. Skipping reset."
-        return
-    fi
-
-    echo "Found Firefox profile: $profile_dir"
-
-    # Remove all files except the "extensions" folder
-    echo "Clearing Firefox profile contents while preserving extensions..."
-    find "$profile_dir" -mindepth 1 -maxdepth 1 ! -name "extensions" -exec rm -rf {} \;
-
-    # Adjust permissions
-    chown -R "$dashboard_user:$dashboard_user" "$firefox_profile_path"
-    echo "Firefox settings reset completed for $dashboard_user."
-    log_message "Firefox settings reset completed for $dashboard_user."
 }
 
 # Function to confirm and restart the system
@@ -720,3 +716,4 @@ add_lockdown_app_to_menu
 configure_caffeine_autostart
 configure_reset_autostart
 confirm_and_restart
+
