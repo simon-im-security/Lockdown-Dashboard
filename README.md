@@ -5,17 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
-    <h1>🚀 Lockdown Kiosk Setup</h1>
+    <h1>🚀 Lockdown Dashboard Setup</h1>
     <h2>Description</h2>
-    <p>This script sets up a <strong>custom kiosk mode</strong> on Ubuntu Desktop, designed to display webpages, making it perfect for dashboards and similar applications. Additionally, it provides a <strong>lockdown feature</strong> to secure the system by disabling USB keyboards and other input devices:</p>
-    <img src="https://github.com/simon-im-security/Ubuntu-Desktop-Kiosk-Setup/blob/main/screenshot.png" alt="Lockdown Kiosk Screenshot" style="width:100%;max-width:800px;margin-top:20px;">
+    <p>This script sets up a <strong>custom lockdown dashboard</strong> on Ubuntu Desktop, designed to secure and display dashboards or other webpages by locking down the device, including input devices. Perfect for situations where you're forced to use a user account linked to a person.</p>
+    <div style="display: flex; gap: 20px; justify-content: center; margin: 20px 0;">
+        <img src="https://github.com/simon-im-security/Lockdown-Dashboard/blob/main/before.png" alt="Before Lockdown" style="width:48%; border:1px solid #ccc; box-shadow: 2px 2px 5px #aaa;">
+        <img src="https://github.com/simon-im-security/Lockdown-Dashboard/blob/main/after.png" alt="After Lockdown" style="width:48%; border:1px solid #ccc; box-shadow: 2px 2px 5px #aaa;">
+    </div>
     <hr>
     <h2>🛠️ Features</h2>
     <h3>User Management</h3>
     <ul>
-        <li><strong>Kiosk User Creation</strong>: Automatically create a dedicated kiosk user with a custom username and password.</li>
+        <li><strong>Lockdown Dashboard User Creation</strong>: Automatically create a dedicated user with a custom username and password.</li>
     </ul>
-    <h3>Kiosk Configuration</h3>
+    <h3>Dashboard Configuration</h3>
     <ul>
         <li><strong>Firefox Shortcuts</strong>: 
             <ul>
@@ -29,7 +32,7 @@
     <ul>
         <li><strong>Lockdown Dashboard</strong>: 
             <ul>
-                <li>A graphical interface to lock the system when the kiosk is set up.</li>
+                <li>A graphical interface to lock the system when the dashboard is set up.</li>
                 <li>Displays real-time system information:
                     <ul>
                         <li>Last system restart time.</li>
@@ -59,7 +62,7 @@
     </ul>
     <h3>Advanced Automation</h3>
     <ul>
-        <li><strong>Reset Firefox Settings</strong>: Resets Firefox profiles automatically at login to ensure a consistent kiosk experience.</li>
+        <li><strong>Reset Firefox Settings</strong>: Resets Firefox profiles automatically at login to ensure a consistent dashboard experience.</li>
         <li><strong>Caffeine Integration</strong>: Prevents the system from sleeping or displaying power-saving notifications.</li>
         <li><strong>Autostart Configuration</strong>: Automatically start the Lockdown Dashboard, Firefox shortcuts, and other necessary services at login.</li>
     </ul>
@@ -67,11 +70,11 @@
     <h2>📝 Setup Process</h2>
     <h3>1. Run the Script as Root</h3>
     <p>Open a terminal and run:</p>
-    <pre><code>sudo wget -O ubuntu_desktop_kiosk_setup.sh https://raw.githubusercontent.com/simon-im-security/Ubuntu-Desktop-Kiosk-Setup/refs/heads/main/ubuntu_desktop_kiosk_setup && sudo bash ubuntu_desktop_kiosk_setup.sh</code></pre>
+    <pre><code>sudo wget -O lockdown_dashboard_ubuntu_install.sh https://raw.githubusercontent.com/simon-im-security/Lockdown-Dashboard/refs/heads/main/lockdown_dashboard_ubuntu_install.sh && sudo bash lockdown_dashboard_ubuntu_install.sh</code></pre>
     <p>This will download the script and execute it with the necessary privileges.</p>
     <h3>2. Follow Prompts</h3>
     <ul>
-        <li>Set up the kiosk user.</li>
+        <li>Set up the lockdown dashboard user.</li>
         <li>Configure URLs for Firefox shortcuts.</li>
         <li>Choose whether to remove unnecessary software or configure the firewall.</li>
     </ul>
@@ -91,10 +94,10 @@
     <h2>ℹ️ Additional Notes</h2>
     <ul>
         <li><strong>Websites with Timeouts</strong>: If you use a website that times out due to inactivity, we recommend installing a Firefox extension that keeps webpages alive (e.g., <i>tab reloader</i> or <i>auto refresh</i> extensions). There are several options available, so choose one that fits your needs.</li>
-        <li><strong>No Enforced Kiosk Mode</strong>: This script avoids enforcing strict kiosk mode to provide flexibility. For example, you can switch tabs, install browser extensions, or access system settings as needed. This approach is ideal for scenarios requiring more control over the kiosk environment.</li>
+        <li><strong>No Enforced Lockdown Mode</strong>: This script avoids enforcing strict lockdown mode to provide flexibility. For example, you can switch tabs, install browser extensions, or access system settings as needed. This approach is ideal for scenarios requiring more control over the lockdown environment.</li>
     </ul>
     <hr>
     <h2>🎉 Get Started Today</h2>
-    <p>Use this script to create a secure and reliable kiosk system tailored to your needs. Let me know if you encounter any issues or have suggestions for improvements!</p>
+    <p>Use this script to create a secure and reliable lockdown system tailored to your needs. Let me know if you encounter any issues or have suggestions for improvements!</p>
 </body>
 </html>
