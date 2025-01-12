@@ -379,16 +379,18 @@ log_message "Firefox processes detected. Proceeding with dashboard popup after 1
 sleep 10
 
 # Display the YAD dialog
-GTK_THEME=Adwaita:dark yad --title="Lockdown Dashboard" \
-    --width=1200 \
-    --height=800 \
+GTK_THEME=Adwaita:dark yad --title="🔒 Lockdown Dashboard" \
+    --width=1000 \
+    --height=600 \
     --button="Lock:0" \
-    --text="<span foreground='#008080' weight='bold' font='36'>LOCKDOWN DASHBOARD</span>\n\n
-<span foreground='#228B22' font='20'>When your dashboard webpage is ready, click the <b>LOCK</b> button at the bottom right corner to secure the device.</span>\n\n
-<b><span foreground='#FF4500'>[ SYSTEM INFORMATION ]</span></b>\n
-<span foreground='#1E90FF'>- Last restart at: <b>$last_restart</b></span>\n
-<span foreground='#1E90FF'>- Last update checked at: <b>$last_update_checked</b></span>\n
-<span foreground='#1E90FF'>- Ubuntu version: <b>$ubuntu_version</b></span>" \
+    --text="<span foreground='#5DADE2' weight='bold' font='36'>🔒 LOCKDOWN DASHBOARD</span>\n\n
+<span font='18'>Clicking <b>Lock</b> will secure your device by disabling input devices and ensuring the system is locked in dashboard mode.</span>\n
+<span font='18'>The <b>Lock</b> button is located at the bottom right corner of this window.</span>\n\n
+<span font='16'>Ensure your dashboard is ready before proceeding.</span>\n\n
+<b><span font='20'>System Information:</span></b>\n
+<span font='12'>- Last Restart: <b>$last_restart</b></span>\n
+<span font='12'>- Last Update Checked: <b>$last_update_checked</b></span>\n
+<span font='12'>- Ubuntu Version: <b>$ubuntu_version</b></span>" \
     --text-align=center || exit 1
 
 # Proceed with locking logic
@@ -545,13 +547,19 @@ EOF
     log_message "Lockdown app added to the menu at $menu_entry."
 }
 
-# Function to configure Caffeine to autostart with additional commands
 configure_caffeine_autostart() {
     log_message "Configuring Caffeine to autostart with gsettings setup after login."
 
     local autostart_file="/home/$dashboard_user/.config/autostart/caffeine.desktop"
     local script_file="/home/$dashboard_user/start_caffeine_with_gsettings.sh"
 
+    if [[ -z "$dashboard_user" || ! -d "/home/$dashboard_user" ]]; then
+        log_message "Error: Invalid or unset dashboard_user: $dashboard_user"
+        echo "Dashboard user is invalid or not set. Exiting function."
+        return 1
+    fi
+
+    log_message "Creating caffeine autostart script at $script_file"
     # Create the script that runs gsettings and starts caffeine
     cat <<EOF > "$script_file"
 #!/bin/bash
@@ -567,10 +575,16 @@ gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
 caffeine
 EOF
 
-    # Make the script executable
+    if [[ ! -f "$script_file" ]]; then
+        log_message "Failed to create $script_file"
+        echo "Error: $script_file was not created. Exiting function."
+        return 1
+    fi
+
     chmod +x "$script_file"
     chown "$dashboard_user:$dashboard_user" "$script_file"
 
+    log_message "Creating autostart entry at $autostart_file"
     # Create the autostart .desktop entry
     mkdir -p /home/$dashboard_user/.config/autostart
     cat <<EOF > "$autostart_file"
@@ -584,7 +598,12 @@ Name=Start Caffeine with GSettings
 Comment=Apply GNOME settings and start Caffeine
 EOF
 
-    # Set proper ownership
+    if [[ ! -f "$autostart_file" ]]; then
+        log_message "Failed to create $autostart_file"
+        echo "Error: $autostart_file was not created. Exiting function."
+        return 1
+    fi
+
     chown -R "$dashboard_user:$dashboard_user" /home/$dashboard_user/.config
 
     log_message "Caffeine autostart configured with GNOME settings setup at $autostart_file."
