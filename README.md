@@ -7,7 +7,7 @@
 <body>
     <h1>🚀 Lockdown Dashboard Setup</h1>
     <h2>Description</h2>
-    <p>This script sets up a <strong>custom lockdown dashboard</strong> on Ubuntu Desktop, designed to secure and display dashboards or other webpages by locking down the device, including input devices. Perfect for situations where you're forced to use a user account linked to a person.</p>
+    <p>This script sets up a <strong>custom lockdown dashboard</strong> on Ubuntu Desktop, designed to secure and display dashboards or other webpages by locking down the device, including input devices. Ideal for use cases requiring secure, automated dashboards.</p>
     <div style="display: flex; gap: 20px; justify-content: center; margin: 20px 0;">
         <img src="https://github.com/simon-im-security/Lockdown-Dashboard/blob/main/before.png" alt="Before Lockdown" style="width:48%; border:1px solid #ccc; box-shadow: 2px 2px 5px #aaa;">
         <img src="https://github.com/simon-im-security/Lockdown-Dashboard/blob/main/after.png" alt="After Lockdown" style="width:48%; border:1px solid #ccc; box-shadow: 2px 2px 5px #aaa;">
@@ -23,7 +23,9 @@
         <li><strong>Firefox Shortcuts</strong>: 
             <ul>
                 <li>Create desktop and autostart shortcuts for specific URLs.</li>
-                <li>Automatically launch these websites in Firefox at login.</li>
+                <li>Automatically launch these websites in private new windows using Firefox.</li>
+                <li>Checks for internet connectivity before opening URLs.</li>
+                <li>Note: Any extensions used in Firefox must be enabled for private window mode in their management options.</li>
             </ul>
         </li>
         <li><strong>GNOME Power &amp; Screen Settings</strong>: Disable screen blanking, sleep, and lock screens to ensure uninterrupted operation.</li>
@@ -33,7 +35,7 @@
         <li><strong>Lockdown Dashboard</strong>: 
             <ul>
                 <li>A graphical interface to lock the system when the dashboard is set up.</li>
-                <li>Displays real-time system information:
+                <li>Displays system information:
                     <ul>
                         <li>Last system restart time.</li>
                         <li>Last update check time.</li>
@@ -43,7 +45,7 @@
                 <li>Lock button disables user inputs for lockdown mode.</li>
             </ul>
         </li>
-        <li><strong>Input Disabling</strong>: Disable all USB, PCI, and built-in input devices while the system is in lockdown.</li>
+        <li><strong>Input Disabling</strong>: Disable all USB, PCI, and built-in input devices while the system is in lockdown mode.</li>
     </ul>
     <h3>System Security</h3>
     <ul>
@@ -62,7 +64,6 @@
     </ul>
     <h3>Advanced Automation</h3>
     <ul>
-        <li><strong>Reset Firefox Settings</strong>: Resets Firefox profiles automatically at login to ensure a consistent dashboard experience.</li>
         <li><strong>Caffeine Integration</strong>: Prevents the system from sleeping or displaying power-saving notifications.</li>
         <li><strong>Autostart Configuration</strong>: Automatically start the Lockdown Dashboard, Firefox shortcuts, and other necessary services at login.</li>
     </ul>
@@ -90,12 +91,12 @@
     </ul>
     <h3>Autostart</h3>
     <ul>
-        <li>Firefox, Caffeine, and the Lockdown Dashboard will start automatically upon login.</li>
+        <li>Firefox (in private new windows), Caffeine, and the Lockdown Dashboard will start automatically upon login.</li>
     </ul>
     <hr>
     <h2>ℹ️ Additional Notes</h2>
     <ul>
-        <li><strong>Websites with Timeouts</strong>: If you use a website that times out due to inactivity, we recommend installing a Firefox extension that keeps webpages alive (e.g., <i>tab reloader</i> or <i>auto refresh</i> extensions). There are several options available, so choose one that fits your needs.</li>
+        <li><strong>Websites with Timeouts</strong>: If you use a website that times out due to inactivity, we recommend installing a Firefox extension that keeps webpages alive (e.g., <i>tab reloader</i> or <i>auto refresh</i> extensions).</li>
         <li><strong>No Enforced Lockdown Mode</strong>: This script avoids enforcing strict lockdown mode to provide flexibility. For example, you can switch tabs, install browser extensions, or access system settings as needed. This approach is ideal for scenarios requiring more control over the lockdown environment.</li>
     </ul>
     <hr>
