@@ -3,7 +3,7 @@
 # Title: Lockdown Dashboard
 # Description: Configures Ubuntu Desktop to display dashboards securely.
 # Author: Simon .I
-# Version: 2025.01.12
+# Version: 2025.01.13
 
 # Function to ensure the script is run as root
 check_root() {
@@ -158,7 +158,7 @@ configure_firefox_shortcuts() {
 [Desktop Entry]
 Type=Application
 Name=$app_name
-Exec=firefox --new-window "$url"
+Exec=bash -c 'while ! ping -c 1 -W 1 8.8.8.8 &>/dev/null; do sleep 1; done; firefox --private-window "$url"'
 Icon=firefox
 Terminal=false
 Categories=Network;WebBrowser;
@@ -170,7 +170,7 @@ EOF
 [Desktop Entry]
 Type=Application
 Name=$app_name
-Exec=firefox --new-window "$url"
+Exec=bash -c 'while ! ping -c 1 -W 1 8.8.8.8 &>/dev/null; do sleep 1; done; firefox --private-window "$url"'
 Icon=firefox
 Terminal=false
 X-GNOME-Autostart-enabled=true
@@ -183,7 +183,7 @@ EOF
         log_message "Shortcut and autostart entry created for $url."
     done
 
-    echo "Firefox shortcuts and autostart entries created successfully."
+    echo "Firefox shortcuts and autostart entries created successfully with internet connectivity check."
 }
 
 # Function to remove unnecessary software
@@ -397,7 +397,7 @@ GTK_THEME=Adwaita:dark yad --title="🔒 Lockdown Dashboard" \
 # Proceed with locking logic
 if [[ $? -eq 0 ]]; then
     log_message "Lock button clicked. Executing input disable script..."
-    sudo /usr/local/bin/disable_inputs.sh
+    sudo /usr/local/bin/lockdown_maintenance.sh
     log_message "Inputs disabled."
 else
     log_message "YAD window closed without action. No inputs disabled."
@@ -430,12 +430,12 @@ EOF
     log_message "Lockdown Dashboard autostart configured for $dashboard_user."
 }
 
-# Function to add Lockdown script to disable inputs
-add_lockdown_disable_inputs_script() {
-    log_message "Adding Lockdown script to disable inputs."
-    local disable_inputs_script="/usr/local/bin/disable_inputs.sh"
+# Function to add Lockdown Maintenance script
+add_lockdown_maintenance_script() {
+    log_message "Adding Lockdown Maintenance script."
+    local maintenance_script="/usr/local/bin/lockdown_maintenance.sh"
 
-    cat <<'EOF' > "$disable_inputs_script"
+    cat <<'EOF' > "$maintenance_script"
 #!/bin/bash
 
 # Function to log messages
@@ -444,9 +444,16 @@ log_message() {
     logger -t "$LOG_TAG" "$1"      # Log the message with the custom tag
 }
 
-log_message "Starting USB and PCI input device disabler loop..."
+log_message "Starting Lockdown Maintenance tasks..."
+
+# Remove unwanted shortcuts
+log_message "Removing unwanted shortcuts..."
+rm -f /usr/share/applications/software-properties-drivers.desktop
+rm -f /usr/share/applications/update-manager.desktop
+log_message "Unwanted shortcuts removed."
 
 # Infinite loop to monitor and disable USB and PCI input devices
+log_message "Starting USB and PCI input device disabler loop..."
 while true; do
     for device in $(find /sys/devices/* -name "inhibited" | grep -E "usb|pci|i8042"); do
         if [ -w "$device" ]; then
@@ -464,8 +471,8 @@ while true; do
 done
 EOF
 
-    chmod +x "$disable_inputs_script"
-    log_message "Lockdown input disable script added at $disable_inputs_script."
+    chmod +x "$maintenance_script"
+    log_message "Lockdown Maintenance script added at $maintenance_script."
 }
 
 # Function to configure update scheduler
@@ -534,7 +541,7 @@ configure_sudoers_for_inputs() {
     local sudoers_entry="/etc/sudoers.d/disable_inputs"
 
     echo "# Allow disabling inputs without password" > "$sudoers_entry"
-    echo "$dashboard_user ALL=(ALL) NOPASSWD: /usr/local/bin/disable_inputs.sh" >> "$sudoers_entry"
+    echo "$dashboard_user ALL=(ALL) NOPASSWD: /usr/local/bin/lockdown_maintenance.sh" >> "$sudoers_entry"
     chmod 440 "$sudoers_entry"
     log_message "Sudoers entry configured for $dashboard_user to disable inputs."
 }
@@ -710,10 +717,9 @@ restrict_terminal_access
 add_lockdown_dashboard_script
 configure_update_scheduler
 configure_lockdown_autostart
-add_lockdown_disable_inputs_script
+add_lockdown_maintenance_script
 configure_sudoers_for_inputs
 add_lockdown_app_to_menu
 configure_caffeine_autostart
 configure_reset_autostart
 confirm_and_restart
-
