@@ -3,7 +3,7 @@
 # Title: Lockdown Dashboard
 # Description: Configures Ubuntu Desktop to display dashboards securely.
 # Author: Simon .I
-# Version: 2025.01.13
+# Version: 2025.01.14
 
 # Function to ensure the script is run as root
 check_root() {
