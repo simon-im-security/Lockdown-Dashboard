@@ -96,7 +96,7 @@
     <hr>
     <h2>ℹ️ Additional Notes</h2>
     <ul>
-        <li><strong>Websites with Timeouts</strong>: If you use a website that times out due to inactivity, we recommend installing a Firefox extension that keeps webpages alive (e.g., <i>tab reloader</i> or <i>auto refresh</i> extensions).</li>
+        <li><strong>Websites with Timeouts</strong>: If you use a website that times out due to inactivity, we recommend installing a Firefox extension that keeps webpages alive (e.g., <i>session alive</i> / <i>tab reloader</i> / <i>auto refresh</i>).</li>
         <li><strong>No Enforced Lockdown Mode</strong>: This script avoids enforcing strict lockdown mode to provide flexibility. For example, you can switch tabs, install browser extensions, or access system settings as needed. This approach is ideal for scenarios requiring more control over the lockdown environment.</li>
     </ul>
     <hr>
