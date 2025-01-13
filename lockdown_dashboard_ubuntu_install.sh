@@ -446,7 +446,7 @@ log_message() {
 
 log_message "Starting Lockdown Maintenance tasks..."
 
-# Remove unwanted shortcuts
+# Remove unwanted shortcuts that re-appears after a system update
 log_message "Removing unwanted shortcuts..."
 rm -f /usr/share/applications/software-properties-drivers.desktop
 rm -f /usr/share/applications/software-properties-gtk.desktop
