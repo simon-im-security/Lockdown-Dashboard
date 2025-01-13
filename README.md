@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
-    <h1>🚀 Lockdown Dashboard Setup</h1>
+    <h1>🚀 Lockdown Dashboard</h1>
     <h2>Description</h2>
     <p>This script sets up a <strong>custom lockdown dashboard</strong> on Ubuntu Desktop, designed to secure and display dashboards or other webpages by locking down the device, including input devices. Ideal for use cases requiring secure, automated dashboards.</p>
     <div style="display: flex; gap: 20px; justify-content: center; margin: 20px 0;">
