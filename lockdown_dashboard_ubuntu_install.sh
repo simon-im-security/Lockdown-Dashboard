@@ -449,6 +449,7 @@ log_message "Starting Lockdown Maintenance tasks..."
 # Remove unwanted shortcuts
 log_message "Removing unwanted shortcuts..."
 rm -f /usr/share/applications/software-properties-drivers.desktop
+rm -f /usr/share/applications/software-properties-gtk.desktop
 rm -f /usr/share/applications/update-manager.desktop
 log_message "Unwanted shortcuts removed."
 
