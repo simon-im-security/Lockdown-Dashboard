@@ -370,6 +370,55 @@ ubuntu_version=$(lsb_release -d | awk -F'\t' '{print $2}')
 
 log_message "Starting Lockdown Dashboard."
 
+# Function to display the main YAD dialog
+display_main_dialog() {
+    GTK_THEME=Adwaita:dark yad --title="🔒 Lockdown Dashboard" \
+        --width=1000 \
+        --height=600 \
+        --button="Lock:0" \
+        --text="\n
+<span foreground='#5DADE2' weight='bold' font='36'>🔒 LOCKDOWN DASHBOARD</span>\n\n
+<span font='18'>Clicking <b>Lock</b> will secure your device by disabling input devices and ensuring the system is locked in dashboard mode.</span>\n
+<span font='18'>The <b>Lock</b> button is located at the bottom right corner of this window.</span>\n\n
+<span font='16'>Ensure your dashboard is ready before proceeding.</span>\n\n
+<b><span font='20'>System Information:</span></b>\n
+<span font='12'>- Last Restart: <b>$last_restart</b></span>\n
+<span font='12'>- Last Update Checked: <b>$last_update_checked</b></span>\n
+<span font='12'>- Ubuntu Version: <b>$ubuntu_version</b></span>" \
+        --text-align=center || exit 1
+
+    # Show the confirmation dialog if "Lock" is clicked
+    if [[ $? -eq 0 ]]; then
+        log_message "Lock button clicked. Showing confirmation prompt."
+        display_confirmation_dialog
+    fi
+}
+
+# Function to display the confirmation dialog
+display_confirmation_dialog() {
+    GTK_THEME=Adwaita:dark yad --title="🔒 Lockdown Dashboard" \
+        --width=800 \
+        --height=350 \
+        --button="Back:1" \
+        --button="Lock Now:0" \
+        --text="\n
+<span font='16'>This will <b>lock the device</b> until the next restart</span>\n
+<span font='16'>(ensure your dashboard is ready before proceeding)</span>\n\n
+<span font='18' foreground='#5DADE2'>Do you want to lock the device now?</span>\n\n
+<span foreground='#5DADE2' font='48'>🔒</span>" \
+        --text-align=center
+
+    # Handle user decision
+    if [[ $? -eq 0 ]]; then
+        log_message "User confirmed lock operation. Executing input disable script..."
+        sudo /usr/local/bin/lockdown_maintenance.sh
+        log_message "Inputs disabled."
+    else
+        log_message "User opted to go back to the main dialog."
+        display_main_dialog # Return to the main dialog
+    fi
+}
+
 # Check if this is the first run in the session
 if [[ ! -f "$SESSION_FILE" ]]; then
     log_message "First run of YAD dialog for this session. Adding 10-second delay."
@@ -379,29 +428,8 @@ else
     log_message "YAD dialog already run this session. Skipping delay."
 fi
 
-# Display the YAD dialog
-GTK_THEME=Adwaita:dark yad --title="🔒 Lockdown Dashboard" \
-    --width=1000 \
-    --height=600 \
-    --button="Lock:0" \
-    --text="<span foreground='#5DADE2' weight='bold' font='36'>🔒 LOCKDOWN DASHBOARD</span>\n\n
-<span font='18'>Clicking <b>Lock</b> will secure your device by disabling input devices and ensuring the system is locked in dashboard mode.</span>\n
-<span font='18'>The <b>Lock</b> button is located at the bottom right corner of this window.</span>\n\n
-<span font='16'>Ensure your dashboard is ready before proceeding.</span>\n\n
-<b><span font='20'>System Information:</span></b>\n
-<span font='12'>- Last Restart: <b>$last_restart</b></span>\n
-<span font='12'>- Last Update Checked: <b>$last_update_checked</b></span>\n
-<span font='12'>- Ubuntu Version: <b>$ubuntu_version</b></span>" \
-    --text-align=center || exit 1
-
-# Proceed with locking logic
-if [[ $? -eq 0 ]]; then
-    log_message "Lock button clicked. Executing input disable script..."
-    sudo /usr/local/bin/lockdown_maintenance.sh
-    log_message "Inputs disabled."
-else
-    log_message "YAD window closed without action. No inputs disabled."
-fi
+# Start the main dialog
+display_main_dialog
 EOF
 
     # Make the script executable
