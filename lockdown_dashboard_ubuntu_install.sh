@@ -504,23 +504,38 @@ EOF
     log_message "Lockdown Maintenance script added at $maintenance_script."
 }
 
-# Function to configure update scheduler
+# Function to configure update scheduler with user prompt
 configure_update_scheduler() {
-    log_message "Configuring the update scheduler."
+    clear
+    log_message "Prompting the user for daily auto updates and restarts."
+    
+    # Explain the purpose to the user
+    echo "Would you like to enable daily automatic updates and restarts?"
+    echo "This will restart the computer daily to ensure it stays updated."
+    echo "If you choose not to enable this, the computer will not update or restart without manual action."
+    read -p "Enable daily auto updates and restarts? (y/n): " enable_updates
+    
+    if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
+        log_message "User opted to enable daily auto updates and restarts."
+        
+        # Path to the update script
+        local update_script="/usr/local/bin/dashboard_update.sh"
 
-    # Path to the update script
-    local update_script="/usr/local/bin/dashboard_update.sh"
-
-    # Create the update script
-    if [[ ! -f "$update_script" ]]; then
-        log_message "Creating the update script at $update_script."
-        cat <<'EOF' > "$update_script"
+        # Create the update script
+        if [[ ! -f "$update_script" ]]; then
+            log_message "Creating the update script at $update_script."
+            cat <<'EOF' > "$update_script"
 #!/bin/bash
 
 # Log the update operation
 log_file="/var/log/dashboard_update.log"
-echo "[$(date)] Starting dashboard update process..." >> "$log_file"
 
+# Kill Firefox processes directly
+echo "[$(date)] Terminating Firefox processes (firefox and firefox-bin)..." >> "$log_file"
+pkill -9 -x "firefox" 2>/dev/null
+pkill -9 -x "firefox-bin" 2>/dev/null
+
+echo "[$(date)] Starting dashboard update process..." >> "$log_file"
 # Perform the update and upgrade
 apt -y update && apt -y upgrade && snap refresh >> "$log_file" 2>&1
 
@@ -532,35 +547,39 @@ echo "[$(date)] Update complete. Restarting system..." >> "$log_file"
 shutdown -r now
 EOF
 
-        # Set executable permissions for the script
-        chmod +x "$update_script"
-        log_message "Update script created and marked as executable."
-    else
-        log_message "Update script already exists at $update_script. Skipping creation."
-    fi
+            # Set executable permissions for the script
+            chmod +x "$update_script"
+            log_message "Update script created and marked as executable."
+        else
+            log_message "Update script already exists at $update_script. Skipping creation."
+        fi
 
-    # Schedule the script using a cron job
-    local cron_file="/etc/cron.d/dashboard_update"
+        # Schedule the script using a cron job
+        local cron_file="/etc/cron.d/dashboard_update"
 
-    if [[ -f "$cron_file" ]] && grep -q "$update_script" "$cron_file"; then
-        log_message "Cron job already exists for the update scheduler in $cron_file. Skipping addition."
-    else
-        log_message "Adding cron job for the update scheduler."
-        
-        # Generate a random minute between 0 and 59
-        local random_minute=$((RANDOM % 60))
+        if [[ -f "$cron_file" ]] && grep -q "$update_script" "$cron_file"; then
+            log_message "Cron job already exists for the update scheduler in $cron_file. Skipping addition."
+        else
+            log_message "Adding cron job for the update scheduler."
+            
+            # Generate a random minute between 0 and 59
+            local random_minute=$((RANDOM % 60))
 
-        # Write the cron job to run at a random time between 1 AM and 2 AM
-        cat <<EOF > "$cron_file"
+            # Write the cron job to run at a random time between 1 AM and 2 AM
+            cat <<EOF > "$cron_file"
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 $random_minute 1 * * * root $update_script
 EOF
 
-        # Set permissions for the cron file
-        chmod 644 "$cron_file"
-        log_message "Cron job added to $cron_file. Updates will occur daily at 1:$random_minute AM."
-        echo "The update scheduler has been configured. Updates will occur at 1:$random_minute AM daily."
+            # Set permissions for the cron file
+            chmod 644 "$cron_file"
+            log_message "Cron job added to $cron_file. Updates will occur daily at 1:$random_minute AM."
+            echo "The update scheduler has been configured. Updates will occur at 1:$random_minute AM daily."
+        fi
+    else
+        log_message "User declined to enable daily auto updates and restarts."
+        echo "Auto updates and restarts have not been enabled. You will need to manually update and restart the system."
     fi
 }
 
@@ -752,3 +771,4 @@ add_lockdown_app_to_menu
 configure_caffeine_autostart
 configure_reset_autostart
 confirm_and_restart
+
