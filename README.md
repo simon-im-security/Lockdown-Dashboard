@@ -95,10 +95,17 @@
     </ul>
     <hr>
     <h2>ℹ️ Additional Notes</h2>
-    <ul>
-        <li><strong>Websites with Timeouts</strong>: If you use a website that times out due to inactivity, we recommend installing a Firefox extension that keeps webpages alive (e.g., <i>session alive</i> / <i>tab reloader</i> / <i>auto refresh</i>).</li>
-        <li><strong>No Enforced Lockdown Mode</strong>: This script avoids enforcing strict lockdown mode to provide flexibility. For example, you can switch tabs, install browser extensions, or access system settings as needed. This approach is ideal for scenarios requiring more control over the lockdown environment.</li>
-    </ul>
+<ul>
+    <li><strong>Websites with Timeouts</strong>: 
+        If you use a website that times out due to inactivity, we recommend installing a Firefox extension that keeps webpages alive (e.g., <i>Session Alive</i>, <i>Tab Reloader</i>, or <i>Auto Refresh</i>).
+    </li>
+    <li><strong>If you have a static page that requires scrolling</strong>, 
+        we recommend installing <i>FoxScroller</i> – this will automatically scroll pages for you.
+    </li>
+    <li><strong>Automatic Login</strong>: 
+        This feature is not enabled by default to follow best practices, but you can easily set it up after initial configuration by navigating to <i>Settings</i> → <i>Users</i> → <i>Automatic Login</i> and enabling the option for your account.
+    </li>
+</ul>
     <hr>
     <h2>🎉 Get Started Today</h2>
     <p>Use this script to create a secure and reliable lockdown system tailored to your needs. Let me know if you encounter any issues or have suggestions for improvements!</p>
