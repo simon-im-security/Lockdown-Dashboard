@@ -510,10 +510,9 @@ configure_update_scheduler() {
     log_message "Prompting the user for daily auto updates and restarts."
     
     # Explain the purpose to the user
-    echo "Would you like to enable daily automatic updates and restarts?"
-    echo "This will restart the computer daily to ensure it stays updated."
-    echo "If you choose not to enable this, the computer will not update or restart without manual action."
-    read -p "Enable daily auto updates and restarts? (y/n): " enable_updates
+    echo "Enable daily automatic updates and restarts? (y/n)"
+    echo "If you skip this, updates and restarts must be done manually."
+    read -p "Enable daily updates? (y/n): " enable_updates
     
     if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
         log_message "User opted to enable daily auto updates and restarts."
@@ -771,4 +770,3 @@ add_lockdown_app_to_menu
 configure_caffeine_autostart
 configure_reset_autostart
 confirm_and_restart
-
