@@ -510,9 +510,9 @@ configure_update_scheduler() {
     log_message "Prompting the user for daily auto updates and restarts."
     
     # Explain the purpose to the user
-    echo "Enable daily automatic updates and restarts? (y/n)"
-    echo "If you skip this, updates and restarts must be done manually."
-    read -p "Enable daily updates? (y/n): " enable_updates
+    echo "Enable daily automatic updates and restarts?"
+    echo "Skipping means updates and restarts must be manual."
+    read -p "Your choice (y/n): " enable_updates
     
     if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
         log_message "User opted to enable daily auto updates and restarts."
